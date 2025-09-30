@@ -240,8 +240,8 @@ const Corporate = () => {
       {/* Popular Corporate Orders */}
       <section className="mb-20">
         <div className="text-center mb-14">
-          <h2 className="text-2xl md:text-4xl font-bold text-gray-800 mb-4">Corporate Wellness Plans</h2>
-          <p className="text-lg lg:text-xl text-gray-600 max-w-3xl mx-auto">Tailored fruit delivery programs designed to boost employee health and productivity</p>
+          <h2 className="text-2xl md:text-4xl font-bold text-gray-800 mb-4">Marriage & Event Fruit Packages</h2>
+          <p className="text-lg lg:text-xl text-gray-600 max-w-3xl mx-auto">Bulk fruit arrangements crafted for weddings, receptions, and special gatherings</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -254,34 +254,39 @@ const Corporate = () => {
                 className="w-full h-full object-cover transition-transform duration-700 hover:scale-110"
               />
               <div className="absolute top-4 right-4 bg-green-500 text-white py-1 px-3 rounded-full text-sm font-semibold">
-                Most Popular
+                Popular Choice
               </div>
             </div>
             <div className="p-6">
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">Essential Wellness</h3>
-              <p className="text-gray-600 mb-4 text-sm lg:text-lg">Perfect for small teams looking to incorporate healthy habits</p>
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">Classic Celebration</h3>
+              <p className="text-gray-600 mb-4 text-sm lg:text-lg">Ideal for small gatherings, engagement parties, and family functions</p>
               <ul className="space-y-2 mb-6">
                 <li className="flex items-center text-xs lg:text-sm">
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span>3 fruit varieties daily</span>
+                  <span>3–4 seasonal fruit varieties</span>
                 </li>
                 <li className="flex items-center text-xs lg:text-sm">
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span>Weekly delivery</span>
+                  <span>Bulk packaging for easy serving</span>
                 </li>
                 <li className="flex items-center text-xs lg:text-sm">
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span>Seasonal selections</span>
+                  <span>Same-day delivery available</span>
                 </li>
               </ul>
-              <button onClick={() => navigate("/subscription")} className="w-full bg-green-100 hover:bg-green-200 text-green-700 font-semibold py-3 rounded-lg transition-colors duration-300">
-                View Plan
+              <button onClick={() => {
+                const section = document.getElementById("contact");
+                if (section) {
+                  section.scrollIntoView({ behavior: "smooth" });
+                }
+              }} className="w-full bg-green-100 hover:bg-green-200 text-green-700 font-semibold py-3 rounded-lg transition-colors duration-300">
+                Get Quote
               </button>
             </div>
           </div>
@@ -296,30 +301,35 @@ const Corporate = () => {
               />
             </div>
             <div className="p-6">
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">Premium Refresh</h3>
-              <p className="text-gray-600 mb-4 text-sm lg:text-lg">Comprehensive nutrition for medium to large organizations</p>
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">Grand Wedding Feast</h3>
+              <p className="text-gray-600 mb-4 text-sm lg:text-lg">Perfect for medium to large weddings and receptions</p>
               <ul className="space-y-2 mb-6">
                 <li className="flex items-center text-xs lg:text-sm">
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span>5+ premium fruit varieties</span>
+                  <span>7+ premium fruit varieties</span>
                 </li>
                 <li className="flex items-center text-xs lg:text-sm">
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span>Twice weekly delivery</span>
+                  <span>Beautifully decorated fruit platters</span>
                 </li>
                 <li className="flex items-center text-xs lg:text-sm">
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span>Organic options available</span>
+                  <span>Organic & premium quality options</span>
                 </li>
               </ul>
-              <button onClick={() => navigate("/subscription")} className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-colors duration-300">
-                View Plan
+              <button onClick={() => {
+                const section = document.getElementById("contact");
+                if (section) {
+                  section.scrollIntoView({ behavior: "smooth" });
+                }
+              }} className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-lg transition-colors duration-300">
+                Get Quote
               </button>
             </div>
           </div>
@@ -334,30 +344,35 @@ const Corporate = () => {
               />
             </div>
             <div className="p-6">
-              <h3 className="text-2xl font-bold text-gray-800 mb-2">Executive Wellness</h3>
-              <p className="text-gray-600 mb-4 text-sm lg:text-lg">Premium customized programs for health-conscious organizations</p>
+              <h3 className="text-2xl font-bold text-gray-800 mb-2">Royal Celebration</h3>
+              <p className="text-gray-600 mb-4 text-sm lg:text-lg">Luxury fruit spreads tailored for grand weddings & VIP functions</p>
               <ul className="space-y-2 mb-6">
                 <li className="flex items-center text-xs lg:text-sm">
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span>Customized fruit selection</span>
+                  <span>Customized exotic fruit selection</span>
                 </li>
                 <li className="flex items-center text-xs lg:text-sm">
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span>Daily delivery options</span>
+                  <span>Live fruit carving & display setups</span>
                 </li>
                 <li className="flex items-center text-xs lg:text-sm">
                   <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span>Nutritionist consultation included</span>
+                  <span>On-site serving staff available</span>
                 </li>
               </ul>
-              <button onClick={() => navigate("/subscription")} className="w-full bg-green-100 hover:bg-green-200 text-green-700 font-semibold py-3 rounded-lg transition-colors duration-300">
-                View Plan
+              <button onClick={() => {
+                const section = document.getElementById("contact");
+                if (section) {
+                  section.scrollIntoView({ behavior: "smooth" });
+                }
+              }} className="w-full bg-green-100 hover:bg-green-200 text-green-700 font-semibold py-3 rounded-lg transition-colors duration-300">
+                Get Quote
               </button>
             </div>
           </div>
@@ -390,11 +405,11 @@ const Corporate = () => {
       </section>
 
       {/* Contact Form */}
-      <section className="bg-white rounded-3xl p-8 shadow-lg">
+      <section className="bg-white rounded-3xl p-8 shadow-lg" id="contact">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Get Your Custom Quote</h2>
-            <p className="text-xl text-gray-600">Tell us about your company's needs and we'll prepare a tailored proposal</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">Get Your Event Quote</h2>
+            <p className="text-xl text-gray-600">Share details about your wedding, reception, or bulk event order and we’ll prepare a tailored package for you</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
