@@ -42,7 +42,25 @@ const OrdersPage = () => {
       leave: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Leave' }
     };
     const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800 border-gray-200', label: status };
-    return <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${config.color}`}>{config.label}</span>;
+    return (
+      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${config.color}`}>
+        {config.label}
+      </span>
+    );
+  };
+
+  const getPaymentStatusBadge = (status) => {
+    const statusConfig = {
+      success: { color: 'bg-green-100 text-green-800 border-green-200', label: 'Success' },
+      pending: { color: 'bg-yellow-100 text-yellow-800 border-yellow-200', label: 'Pending' },
+      failed: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Failed' },
+    };
+    const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800 border-gray-200', label: status || 'Unknown' };
+    return (
+      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${config.color}`}>
+        {config.label}
+      </span>
+    );
   };
 
   if (loading) {
@@ -75,43 +93,44 @@ const OrdersPage = () => {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Order ID
-              </th>
-              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                User
-              </th>
-              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Amount
-              </th>
-              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Date
-              </th>
-              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                Status
-              </th>
+              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Order ID</th>
+              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">User</th>
+              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Pack</th>
+              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Amount</th>
+              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Date</th>
+              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Payment Method</th>
+              <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Payment Status</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {orders.map((order) => (
-              <tr key={order.id} className="hover:bg-emerald-50/50 transition-colors">
-                <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-xs lg:text-sm font-mono font-semibold text-emerald-600">
-                  #{order.id.slice(-8)}
-                </td>
-                <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-xs lg:text-sm font-medium text-gray-900">
-                  {subscriptions.find(sub => sub.id === order.userId)?.name || 'Unknown User'}
-                </td>
-                <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-xs lg:text-sm font-semibold text-emerald-600">
-                  ₹{order.amount}
-                </td>
-                <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-xs lg:text-sm text-gray-500">
-                  {order.createdAt.toLocaleDateString()}
-                </td>
-                <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                  {getStatusBadge(order.deliveryStatus || 'pending')}
-                </td>
-              </tr>
-            ))}
+            {orders.map((order) => {
+              const user = subscriptions.find(sub => sub.id === order.userId);
+              return (
+                <tr key={order.id} className="hover:bg-emerald-50/50 transition-colors">
+                  <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-xs lg:text-sm font-mono font-semibold text-emerald-600">
+                    #{order.id.slice(-8)}
+                  </td>
+                  <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-xs lg:text-sm font-medium text-gray-900">
+                    {user?.name || 'Unknown User'}
+                  </td>
+                  <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-xs lg:text-sm text-gray-700">
+                    {order.items?.map(item => item.name).join(", ") || 'N/A'}
+                  </td>
+                  <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-xs lg:text-sm font-semibold text-emerald-600">
+                    ₹{order.amount}
+                  </td>
+                  <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-xs lg:text-sm text-gray-500">
+                    {order.createdAt.toLocaleDateString()}
+                  </td>
+                  <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-xs lg:text-sm text-gray-700">
+                    {order.paymentMethod || 'N/A'}
+                  </td>
+                  <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                    {getPaymentStatusBadge(order.paymentStatus || 'pending')}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
