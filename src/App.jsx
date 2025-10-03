@@ -21,6 +21,11 @@ import AdminPanel from "./pages/AdminPanel";
 import TermsAndConditions from "./pages/TermsAndCondition";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import ScrollToTop from "./components/ScrollToTop";
+import AdminLayout from "./screens/AdminLayout";
+import SubscriptionsPage from "./pages/admin/SubscriptionsPage";
+import OrdersPage from "./pages/admin/OrdersPage";
+import AttendancePage from "./pages/admin/AttendancePage";
+import AnalyticsPage from "./pages/admin/AnalyticsPage";
 
 // Layout with Navbar + Footer
 function MainLayout() {
@@ -70,14 +75,21 @@ function App() {
           <Route path="/forgot-password" element={<ForgotPassword />} />
 
           {/* Admin route */}
-          <Route
+          {/* <Route
             path="/admin"
             element={
               <AdminRoute>
                 <AdminPanel />
               </AdminRoute>
             }
-          />
+          /> */}
+
+          <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
+            <Route index element={<SubscriptionsPage />} />
+            <Route path="orders" element={<OrdersPage />} />
+            <Route path="attendance" element={<AttendancePage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
+          </Route>
 
           {/* Redirect unknown to home */}
           <Route path="*" element={<Navigate to="/" replace />} />

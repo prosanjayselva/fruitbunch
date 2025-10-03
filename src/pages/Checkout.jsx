@@ -54,6 +54,7 @@ const Checkout = () => {
   const [mapCenter, setMapCenter] = useState([12.2253, 79.0747]); // Default center: Tiruvannamalai, Tamil Nadu
   const [mapZoom, setMapZoom] = useState(13);
   const [mapType, setMapType] = useState('satellite'); // 'satellite' or 'street'
+  const [deliveryTime, setDeliveryTime] = useState("7:30 AM");
 
   // Custom marker icon
   const markerIcon = new L.Icon({
@@ -185,6 +186,12 @@ const Checkout = () => {
     return null;
   };
 
+  const getExpiryDate = () => {
+    const now = new Date();
+    now.setDate(now.getDate() + 26);
+    return now;
+  };
+
   // ----- Handle checkout -----
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -204,8 +211,12 @@ const Checkout = () => {
           items: cartItems,
           amount: cartTotal,
           currency: "INR",
-          status: "Pending (COD)", // COD orders start as pending
+          status: "Pending (COD)",
           paymentMethod: "COD",
+          paymentStatus: "Pending",
+          deliveryStatus: "N/A",
+          preferredTime: deliveryTime,
+          expiryDate: getExpiryDate(),
           createdAt: serverTimestamp(),
           shipping: {
             firstName: formData.firstName,
@@ -217,7 +228,7 @@ const Checkout = () => {
             state: formData.state,
             pincode: formData.pincode,
             country: formData.country,
-            location: location, // { lat, lng }
+            location: location,
           },
         });
 
@@ -247,6 +258,10 @@ const Checkout = () => {
         status: "Initiated",
         paymentMethod,
         razorpayOrderId: orderId,
+        paymentStatus: "Initiated",
+        deliveryStatus: "N/A",
+        preferredTime: deliveryTime,
+        expiryDate: getExpiryDate(),
         createdAt: serverTimestamp(),
         shipping: {
           firstName: formData.firstName,
@@ -292,6 +307,17 @@ const Checkout = () => {
                 signature: response.razorpay_signature,
                 createdAt: serverTimestamp(),
               });
+
+              const orderQuery = collection(db, "orders");
+              const orderDocs = await getDocs(orderQuery);
+              const matchedOrder = orderDocs.docs.find(doc => doc.data().razorpayOrderId === orderId);
+
+              if (matchedOrder) {
+                await updateDoc(matchedOrder.ref, {
+                  paymentStatus: "Paid",
+                  status: "Confirmed"
+                });
+              }
 
               clearCart();
               navigate("/orderconfirmation", {
@@ -605,6 +631,18 @@ const Checkout = () => {
                   required
                 />
               </div>
+            </div>
+            <h2 className="text-xl font-semibold text-gray-800 mb-4">Preferred Delivery Time</h2>
+            <div className="mb-6">
+              <select
+                value={deliveryTime}
+                onChange={(e) => setDeliveryTime(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                <option value="7:30 AM">7:30 AM</option>
+                <option value="11:30 AM">11:30 AM</option>
+                <option value="4:30 PM">4:30 PM</option>
+              </select>
             </div>
 
             <h2 className="text-xl font-semibold text-gray-800 mb-4">Payment Method</h2>
