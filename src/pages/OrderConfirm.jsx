@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, Link } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
+import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -13,12 +13,20 @@ const OrderConfirmation = () => {
 
   useEffect(() => {
     if (!orderId) return;
+
     const fetchOrder = async () => {
       try {
-        const orderRef = doc(db, "orders", orderId);
-        const snapshot = await getDoc(orderRef);
-        if (snapshot.exists()) {
-          setOrder(snapshot.data());
+        const q = query(
+          collection(db, "orders"),
+          where("razorpayOrderId", "==", orderId) // match Razorpay orderId
+        );
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          const orderDoc = querySnapshot.docs[0];
+          setOrder(orderDoc.data());
+        } else {
+          console.warn("No order found with Razorpay Order ID:", orderId);
         }
       } catch (err) {
         console.error("Error fetching order:", err);
@@ -28,7 +36,7 @@ const OrderConfirmation = () => {
     };
 
     fetchOrder();
-    
+
     // Trigger animation completion after initial load
     const timer = setTimeout(() => setAnimationComplete(true), 2000);
     return () => clearTimeout(timer);
@@ -36,7 +44,7 @@ const OrderConfirmation = () => {
 
   if (!orderId) {
     return (
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="min-h-screen bg-gradient-to-br from-emerald-50 to-green-50 flex items-center justify-center px-4"
@@ -55,8 +63,8 @@ const OrderConfirmation = () => {
           <p className="text-gray-600 mb-6">
             We couldn't find your order details. Please check your confirmation link.
           </p>
-          <Link 
-            to="/" 
+          <Link
+            to="/"
             className="inline-flex items-center bg-emerald-600 text-white px-6 py-3 rounded-xl hover:bg-emerald-700 transition-all duration-300 font-medium"
           >
             <i className="fas fa-home mr-2"></i>
@@ -80,18 +88,18 @@ const OrderConfirmation = () => {
           <motion.div
             initial={{ scale: 0, rotate: -180 }}
             animate={{ scale: 1, rotate: 0 }}
-            transition={{ 
-              type: "spring", 
-              stiffness: 200, 
+            transition={{
+              type: "spring",
+              stiffness: 200,
               damping: 15,
-              delay: 0.2 
+              delay: 0.2
             }}
             className="w-24 h-24 bg-gradient-to-r from-emerald-500 to-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg"
           >
             <i className="fas fa-check-circle text-4xl text-white"></i>
           </motion.div>
-          
-          <motion.h1 
+
+          <motion.h1
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.4 }}
@@ -99,8 +107,8 @@ const OrderConfirmation = () => {
           >
             Order Confirmed!
           </motion.h1>
-          
-          <motion.p 
+
+          <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.6 }}
@@ -117,14 +125,12 @@ const OrderConfirmation = () => {
           transition={{ delay: 0.8 }}
           className="flex justify-center mb-8"
         >
-          <span className={`inline-flex items-center px-6 py-3 rounded-full text-sm font-semibold ${
-            payment === 'success' 
-              ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
-              : 'bg-amber-100 text-amber-800 border border-amber-200'
-          }`}>
-            <i className={`fas ${
-              payment === 'success' ? 'fa-check-circle' : 'fa-clock'
-            } mr-2`}></i>
+          <span className={`inline-flex items-center px-6 py-3 rounded-full text-sm font-semibold ${payment === 'success'
+            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+            : 'bg-amber-100 text-amber-800 border border-amber-200'
+            }`}>
+            <i className={`fas ${payment === 'success' ? 'fa-check-circle' : 'fa-clock'
+              } mr-2`}></i>
             Payment {payment?.toUpperCase()}
           </span>
         </motion.div>
@@ -142,7 +148,7 @@ const OrderConfirmation = () => {
               Order Details
             </h2>
           </div>
-          
+
           <div className="p-6">
             {/* Order ID */}
             <div className="flex items-center justify-between py-3 border-b border-gray-100">
@@ -191,7 +197,7 @@ const OrderConfirmation = () => {
                       </div>
                       <div className="text-lg font-bold text-emerald-700">₹{order.amount}</div>
                     </div>
-                    
+
                     <div className="bg-green-50 p-4 rounded-xl">
                       <div className="text-sm text-green-600 font-medium mb-1">
                         {/* <i className="fas fa-calendar mr-1"></i> */}
@@ -215,13 +221,25 @@ const OrderConfirmation = () => {
                         {order.status || 'Confirmed'}
                       </span>
                     </div>
-                    
+
                     <div className="bg-cyan-50 p-4 rounded-xl">
                       <div className="text-sm text-cyan-600 font-medium mb-1">
                         {/* <i className="fas fa-globe mr-1"></i> */}
                         Plan
                       </div>
-                      <div className="text-sm font-semibold text-cyan-700">{order.items[0].name}</div>
+                      <div className="text-sm font-semibold text-cyan-700">
+                        {order.items && order.items.length > 0 ? (
+                          <ul className="list-disc list-inside space-y-1">
+                            {order.items.map((item, index) => (
+                              <li key={index}>
+                                {item.name} {item.quantity ? `x${item.quantity}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          "No items"
+                        )}
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -313,7 +331,7 @@ const OrderConfirmation = () => {
             <i className="fas fa-shopping-bag mr-2 group-hover:scale-110 transition-transform"></i>
             Continue Shopping
           </Link>
-          
+
           <Link
             to="/profile"
             className="flex-1 border-2 border-emerald-600 text-emerald-600 px-8 py-4 rounded-xl hover:bg-emerald-50 transition-all duration-300 font-semibold text-center group"
@@ -330,18 +348,18 @@ const OrderConfirmation = () => {
               {[...Array(5)].map((_, i) => (
                 <motion.div
                   key={i}
-                  initial={{ 
-                    scale: 0, 
+                  initial={{
+                    scale: 0,
                     opacity: 0,
                     x: Math.random() * 100 - 50,
                     y: Math.random() * 100 - 50
                   }}
-                  animate={{ 
+                  animate={{
                     scale: [0, 1, 0],
                     opacity: [0, 1, 0],
                     rotate: Math.random() * 360
                   }}
-                  transition={{ 
+                  transition={{
                     duration: 2,
                     delay: i * 0.3,
                     repeat: Infinity,

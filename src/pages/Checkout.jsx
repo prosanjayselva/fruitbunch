@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import 'leaflet/dist/leaflet.css';
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp, getDocs, updateDoc } from "firebase/firestore";
 import axios from "axios";
 import { auth, db } from '../../firebaseConfig';
 
@@ -28,10 +28,10 @@ const Checkout = () => {
   const [processingPayment, setProcessingPayment] = useState(false);
 
   if (processingPayment) {
-    document.body.style.pointerEvents = 'none';
+    // document.body.style.pointerEvents = 'none';
     document.body.style.opacity = '0.6';
   } else {
-    document.body.style.pointerEvents = 'auto';
+    // document.body.style.pointerEvents = 'auto';
     document.body.style.opacity = '1';
   }
 
