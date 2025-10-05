@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import 'leaflet/dist/leaflet.css';
-import { addDoc, collection, serverTimestamp, getDocs, updateDoc } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp, getDocs, updateDoc, Timestamp } from "firebase/firestore";
 import axios from "axios";
 import { auth, db } from '../../firebaseConfig';
 
@@ -19,6 +19,28 @@ L.Icon.Default.mergeOptions({
 const createOrderUrl = import.meta.env.VITE_API_CREATE_ORDER;
 const verifyPaymentUrl = import.meta.env.VITE_API_VERIFY_PAYMENT;
 
+const initializeAttendance = async (orderId, userId, startDate, expiryDate) => {
+  const attendanceRef = collection(db, "attendance");
+
+  let current = new Date(startDate.toDate());
+  current.setDate(current.getDate() + 1);
+  const end = expiryDate.toDate();
+
+  while (current <= end) {
+    const dateStr = current.toISOString().split("T")[0]; // YYYY-MM-DD
+
+    await addDoc(attendanceRef, {
+      orderId,
+      userId,
+      date: dateStr,
+      status: "pending",     // default = awaiting delivery
+      updatedAt: Timestamp.now()
+    });
+
+    current.setDate(current.getDate() + 1);
+  }
+};
+
 const Checkout = () => {
   const { cartItems, cartTotal, clearCart } = useCart();
   const navigate = useNavigate();
@@ -26,14 +48,6 @@ const Checkout = () => {
   const user = auth.currentUser;
 
   const [processingPayment, setProcessingPayment] = useState(false);
-
-  if (processingPayment) {
-    // document.body.style.pointerEvents = 'none';
-    document.body.style.opacity = '0.6';
-  } else {
-    // document.body.style.pointerEvents = 'auto';
-    document.body.style.opacity = '1';
-  }
 
   // Form state
   const [formData, setFormData] = useState({
@@ -232,6 +246,13 @@ const Checkout = () => {
           },
         });
 
+        await initializeAttendance(
+          orderRef.id,
+          user?.uid,
+          new Date(),
+          getExpiryDate()
+        );
+
         clearCart();
         navigate("/orderconfirmation", {
           state: { orderId: orderRef.id, payment: "cod" },
@@ -318,6 +339,13 @@ const Checkout = () => {
                   status: "Confirmed"
                 });
               }
+              
+              await initializeAttendance(
+                matchedOrder.id,
+                user?.uid,
+                matchedOrder.data().createdAt || new Date(),
+                matchedOrder.data().expiryDate
+              );
 
               clearCart();
               navigate("/orderconfirmation", {
@@ -394,7 +422,7 @@ const Checkout = () => {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div id="page-content" className={`container mx-auto px-4 py-8 transition-opacity duration-300 ${processingPayment ? 'opacity-50 pointer-events-none' : 'opacity-100 pointer-events-auto'}`}>
       <h1 className="text-3xl font-bold text-center text-gray-800 mb-8">Checkout</h1>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

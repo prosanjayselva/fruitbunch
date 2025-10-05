@@ -6,10 +6,10 @@ const AdminSidebar = ({ sidebarOpen, setSidebarOpen }) => {
   const navigate = useNavigate();
 
   const tabs = [
-    { id: 'subscriptions', label: 'Subscriptions', icon: 'fa-chart-pie', path: '/admin' },
+    { id: 'analytics', label: 'Analytics', icon: 'fa-chart-line', path: '/admin' },
+    { id: 'subscriptions', label: 'Subscriptions', icon: 'fa-chart-pie', path: '/admin/subscriptions' },
     { id: 'orders', label: 'Orders', icon: 'fa-box', path: '/admin/orders' },
     { id: 'attendance', label: 'Attendance', icon: 'fa-users', path: '/admin/attendance' },
-    { id: 'analytics', label: 'Analytics', icon: 'fa-chart-line', path: '/admin/analytics' }
   ];
 
   const getActiveTab = () => {

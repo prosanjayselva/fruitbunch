@@ -1,24 +1,34 @@
-import React from 'react';
+import React, {useEffect, useState} from 'react';
 import { useLocation } from 'react-router-dom';
 
 const AdminHeader = () => {
   const location = useLocation();
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    // Fetch user data from localStorage or an API
+  const storedUser = localStorage.getItem("user");
+    if (storedUser) {
+      const userData = JSON.parse(storedUser);
+      setUser(userData);
+    }
+  }, []);
 
   const getPageTitle = () => {
     const path = location.pathname;
-    if (path === '/admin') return 'Subscriptions';
+    if (path === '/admin') return 'Analytics';
     if (path === '/admin/orders') return 'Orders';
     if (path === '/admin/attendance') return 'Attendance';
-    if (path === '/admin/analytics') return 'Analytics';
+    if (path === '/admin/subscriptions') return 'Subscriptions';
     return 'Dashboard';
   };
 
   const getPageDescription = () => {
     const path = location.pathname;
-    if (path === '/admin') return 'Active subscriptions and customer management';
+    if (path === '/admin') return 'Overview of key metrics and performance';
     if (path === '/admin/orders') return 'Track and manage all delivery orders';
     if (path === '/admin/attendance') return 'Daily delivery performance tracking';
-    if (path === '/admin/analytics') return 'Business insights and analytics';
+    if (path === '/admin/subscriptions') return 'Active subscriptions and customer management';
     return 'Manage your delivery operations efficiently';
   };
 
@@ -37,7 +47,7 @@ const AdminHeader = () => {
           <div className="hidden lg:flex items-center space-x-4">
             <div className="text-right">
               <div className="text-sm font-medium text-gray-900">
-                Welcome back, Admin
+                Welcome back, {user ? user.name : 'Admin'}
               </div>
               <div className="text-xs text-gray-500">
                 Last updated: Just now

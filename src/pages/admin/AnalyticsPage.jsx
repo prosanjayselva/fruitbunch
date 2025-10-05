@@ -6,7 +6,10 @@ const AnalyticsPage = () => {
   const [subscriptions, setSubscriptions] = useState([]);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState('all'); // all, month, week
+
+  // Filters
+  const [timeRange, setTimeRange] = useState('all'); // affects all metrics
+  const [revenueRange, setRevenueRange] = useState('all'); // revenue-specific filter
 
   useEffect(() => {
     fetchData();
@@ -48,27 +51,51 @@ const AnalyticsPage = () => {
     }
   };
 
-  const filterOrdersByTimeRange = (orders) => {
+  // --- Helper for filtering ---
+  const filterByTimeRange = (orders, range) => {
     const now = new Date();
-    switch (timeRange) {
-      case 'week':
-        const weekAgo = new Date(now.setDate(now.getDate() - 7));
-        return orders.filter(order => new Date(order.createdAt) >= weekAgo);
-      case 'month':
-        const monthAgo = new Date(now.setMonth(now.getMonth() - 1));
-        return orders.filter(order => new Date(order.createdAt) >= monthAgo);
-      default:
-        return orders;
+    if (range === 'week') {
+      const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
+      return orders.filter(order => new Date(order.createdAt) >= weekAgo);
     }
+    if (range === 'month') {
+      const monthAgo = new Date(); monthAgo.setMonth(now.getMonth() - 1);
+      return orders.filter(order => new Date(order.createdAt) >= monthAgo);
+    }
+    return orders;
   };
 
-  const filteredOrders = filterOrdersByTimeRange(orders);
+  // Apply filters
+  const filteredOrders = filterByTimeRange(orders, timeRange);
+  const filteredRevenueOrders = filterByTimeRange(orders, revenueRange);
 
-  const totalRevenue = filteredOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+  // --- Metrics ---
+  const totalRevenue = filteredRevenueOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
   const activeSubscriptions = subscriptions.filter(sub => sub.orders.length > 0).length;
   const deliverySuccessRate = filteredOrders.length > 0 
     ? Math.round((filteredOrders.filter(o => o.deliveryStatus === 'delivered').length / filteredOrders.length) * 100)
     : 0;
+
+  const filteredRevenueOrdersCount = filteredRevenueOrders.length;
+  const averageOrderValue = filteredRevenueOrdersCount > 0 
+    ? Math.round(totalRevenue / filteredRevenueOrdersCount) 
+    : 0;
+
+  const repeatCustomers = subscriptions.filter(sub => sub.orders.length > 1).length;
+  const pendingOrders = filteredOrders.filter(o => o.deliveryStatus === 'pending').length;
+  const cancelledOrders = filteredOrders.filter(o => o.deliveryStatus === 'cancelled').length;
+
+  // Top products
+  const productSalesMap = {};
+  filteredRevenueOrders.forEach(order => {
+    order.items?.forEach(item => {
+      if (!productSalesMap[item.name]) productSalesMap[item.name] = 0;
+      productSalesMap[item.name] += item.quantity || 1;
+    });
+  });
+  const topProducts = Object.entries(productSalesMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
 
   if (loading) {
     return (
@@ -83,168 +110,61 @@ const AnalyticsPage = () => {
 
   return (
     <div className="space-y-6">
-      {/* Time Range Filter */}
-      <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 lg:p-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <h2 className="text-lg lg:text-xl font-semibold text-gray-900">Business Analytics</h2>
-            <p className="text-emerald-700 text-sm">
-              Performance metrics and insights
-            </p>
-          </div>
+      {/* Filters */}
+      <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 lg:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg lg:text-xl font-semibold text-gray-900">Analytics</h2>
+          <p className="text-emerald-700 text-sm">Performance metrics and insights</p>
+        </div>
+        <div className="flex gap-4">
           <select
             value={timeRange}
             onChange={(e) => setTimeRange(e.target.value)}
-            className="border border-emerald-200 rounded-xl px-4 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm"
+            className="border border-emerald-200 rounded-xl px-4 py-2 bg-white text-sm"
           >
             <option value="all">All Time</option>
             <option value="month">Last Month</option>
             <option value="week">Last Week</option>
           </select>
+          <select
+            value={revenueRange}
+            onChange={(e) => setRevenueRange(e.target.value)}
+            className="border border-emerald-200 rounded-xl px-4 py-2 bg-white text-sm"
+          >
+            <option value="all">All Revenue</option>
+            <option value="month">This Month</option>
+            <option value="week">This Week</option>
+          </select>
         </div>
       </div>
 
-      {/* Key Metrics */}
+      {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
-        <div className="bg-gradient-to-br from-emerald-500 to-green-500 p-4 lg:p-6 rounded-2xl text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-emerald-100">
-                Total Users
-              </h3>
-              <div className="text-2xl lg:text-3xl font-bold mt-2">{subscriptions.length}</div>
-            </div>
-            <div className="text-2xl lg:text-3xl">
-              <i className="fas fa-user-friends"></i>
-            </div>
-          </div>
-          <div className="text-emerald-200 text-xs lg:text-sm mt-4">
-            Registered customers
-          </div>
-        </div>
+        <MetricCard title="Total Users" value={subscriptions.length} subtitle="Registered customers" fromColor="from-emerald-500" toColor="to-green-500" />
+        <MetricCard title="Active Subscriptions" value={activeSubscriptions} subtitle="Current active plans" fromColor="from-green-500" toColor="to-emerald-600" />
+        <MetricCard title="Revenue" value={`₹${totalRevenue}`} subtitle={revenueRange === 'all' ? 'Lifetime revenue' : revenueRange === 'month' ? 'Monthly revenue' : 'Weekly revenue'} fromColor="from-emerald-600" toColor="to-green-700" />
+        <MetricCard title="Success Rate" value={`${deliverySuccessRate}%`} subtitle="Delivery success rate" fromColor="from-blue-500" toColor="to-indigo-600" />
 
-        <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-4 lg:p-6 rounded-2xl text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-emerald-100">
-                Active Subscriptions
-              </h3>
-              <div className="text-2xl lg:text-3xl font-bold mt-2">{activeSubscriptions}</div>
-            </div>
-            <div className="text-2xl lg:text-3xl">
-              <i className="fas fa-boxes"></i>
-            </div>
-          </div>
-          <div className="text-emerald-200 text-xs lg:text-sm mt-4">
-            Current active plans
-          </div>
-        </div>
+        <MetricCard title="Average Order Value" value={`₹${averageOrderValue}`} subtitle="Revenue per order" fromColor="from-purple-500" toColor="to-purple-700" />
+        <MetricCard title="Repeat Customers" value={repeatCustomers} subtitle="Customers with multiple orders" fromColor="from-pink-500" toColor="to-pink-700" />
+        {/* <MetricCard title="Pending Orders" value={pendingOrders} subtitle="Orders awaiting delivery" fromColor="from-yellow-500" toColor="to-yellow-600" />
+        <MetricCard title="Cancelled Orders" value={cancelledOrders} subtitle="Orders not completed" fromColor="from-gray-500" toColor="to-gray-600" /> */}
 
-        <div className="bg-gradient-to-br from-emerald-600 to-green-700 p-4 lg:p-6 rounded-2xl text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-emerald-100">
-                Total Revenue
-              </h3>
-              <div className="text-2xl lg:text-3xl font-bold mt-2">
-                ₹{totalRevenue}
-              </div>
-            </div>
-            <div className="text-2xl lg:text-3xl">
-              <i className="fas fa-money-bill-wave"></i>
-            </div>
-          </div>
-          <div className="text-emerald-200 text-xs lg:text-sm mt-4">
-            {timeRange === 'all' ? 'Lifetime' : timeRange === 'month' ? 'This month' : 'This week'}
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 lg:p-6 rounded-2xl text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-blue-100">
-                Success Rate
-              </h3>
-              <div className="text-2xl lg:text-3xl font-bold mt-2">
-                {deliverySuccessRate}%
-              </div>
-            </div>
-            <div className="text-2xl lg:text-3xl">
-              <i className="fas fa-chart-line"></i>
-            </div>
-          </div>
-          <div className="text-blue-200 text-xs lg:text-sm mt-4">
-            Delivery success rate
-          </div>
-        </div>
-      </div>
-
-      {/* Additional Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Order Status Distribution */}
-        <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 lg:p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Status Distribution</h3>
-          <div className="space-y-3">
-            {['delivered', 'pending', 'not_delivered', 'cancelled', 'leave'].map(status => {
-              const count = filteredOrders.filter(order => order.deliveryStatus === status).length;
-              const percentage = filteredOrders.length > 0 ? (count / filteredOrders.length) * 100 : 0;
-              const statusColors = {
-                delivered: 'bg-emerald-500',
-                pending: 'bg-amber-500',
-                not_delivered: 'bg-red-500',
-                cancelled: 'bg-gray-500',
-                leave: 'bg-blue-500'
-              };
-
-              return (
-                <div key={status} className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700 capitalize">{status.replace('_', ' ')}</span>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-24 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className={`h-2 rounded-full ${statusColors[status]}`}
-                        style={{ width: `${percentage}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-sm text-gray-600 w-8">{count}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 p-4 lg:p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-          <div className="space-y-3 max-h-64 overflow-y-auto">
-            {filteredOrders.slice(0, 10).map(order => (
-              <div key={order.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">
-                    Order #{order.id.slice(-6)}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {new Date(order.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-emerald-600">₹{order.amount}</p>
-                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    order.deliveryStatus === 'delivered' ? 'bg-emerald-100 text-emerald-800' :
-                    order.deliveryStatus === 'pending' ? 'bg-amber-100 text-amber-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {order.deliveryStatus || 'pending'}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        {topProducts.map(([name, count], idx) => (
+          <MetricCard key={idx} title={`Top Product`} value={name} subtitle={`${count} sold`} fromColor="from-emerald-400" toColor="to-green-400" />
+        ))}
       </div>
     </div>
   );
 };
+
+// --- Metric Card Component ---
+const MetricCard = ({ title, value, subtitle, fromColor, toColor }) => (
+  <div className={`bg-gradient-to-br ${fromColor} ${toColor} p-4 lg:p-6 rounded-2xl text-white shadow-lg`}>
+    <h3 className="text-lg font-semibold">{title}</h3>
+    <div className="text-2xl lg:text-3xl font-bold mt-2">{value}</div>
+    <p className="text-white/70 text-xs lg:text-sm mt-2">{subtitle}</p>
+  </div>
+);
 
 export default AnalyticsPage;

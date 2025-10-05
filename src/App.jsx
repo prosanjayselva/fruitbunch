@@ -85,10 +85,10 @@ function App() {
           /> */}
 
           <Route path="/admin" element={<AdminRoute><AdminLayout /></AdminRoute>}>
-            <Route index element={<SubscriptionsPage />} />
+            <Route index element={<AnalyticsPage />} />
+            <Route path="subscriptions" element={<SubscriptionsPage />} />
             <Route path="orders" element={<OrdersPage />} />
             <Route path="attendance" element={<AttendancePage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
           </Route>
 
           {/* Redirect unknown to home */}

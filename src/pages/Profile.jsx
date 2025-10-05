@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getAuth, signOut, updateProfile } from "firebase/auth";
-import { collection, query, where, doc, getDocs, updateDoc } from "firebase/firestore";
+import { collection, query, where, doc, getDocs, getDoc } from "firebase/firestore";
 import { getFirestore } from "firebase/firestore";
 
 const db = getFirestore();
@@ -9,7 +9,8 @@ import { useNavigate } from "react-router-dom";
 const Profile = () => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [orders, setOrders] = useState([]);
+  const [records, setRecords] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [subscription, setSubscription] = useState(null);
   const [activeTab, setActiveTab] = useState("profile");
   const navigate = useNavigate();
@@ -20,59 +21,106 @@ const Profile = () => {
       const userData = JSON.parse(storedUser);
       setUser(userData);
 
-      const fetchOrders = async () => {
-        try {
-          const ordersRef = collection(db, "orders");
-          const q = query(ordersRef, where("userId", "==", userData.uid));
-
-          const querySnapshot = await getDocs(q);
-
-          const orderList = querySnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-
-          setOrders(orderList);
-
-          if (orderList.length > 0) {
-            const latestOrder = orderList[0];
-
-            // Calculate expiry (start + 26 days)
-            const startDate = latestOrder.createdAt?.toDate?.() || new Date();
-            const expiryDate = new Date(startDate);
-            expiryDate.setDate(startDate.getDate() + 26);
-
-            const now = new Date();
-            const isExpired = now > expiryDate;
-
-            if (!isExpired) {
-              const daysLeft = Math.max(
-                0,
-                Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24))
-              );
-              setSubscription({
-                plan: latestOrder.items?.[0]?.name || "Standard",
-                product: latestOrder.items?.[0]?.description || "Subscription",
-                status: latestOrder.status,
-                startDate: startDate.toISOString(),
-                expiryDate: expiryDate.toISOString(),
-                price: `₹${latestOrder.amount}`,
-                daysLeft,
-              });
-            } else {
-              setSubscription(null);
-            }
-          }
-        } catch (err) {
-          console.error("Error fetching orders:", err);
-        }
-      };
-
-      fetchOrders();
+      fetchSubscription(userData.uid);
+      fetchAttendanceHistory(userData.uid);
     }
-    setIsLoading(false);
-  }, [db]);
+  }, []);
 
+  // 🔹 Fetch subscription: latest non-expired order
+  const fetchSubscription = async (userId) => {
+    try {
+      const ordersRef = collection(db, "orders");
+      const q = query(ordersRef, where("userId", "==", userId));
+      const snapshot = await getDocs(q);
+
+      if (!snapshot.empty) {
+        const orders = snapshot.docs
+          .map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))
+          .sort((a, b) => b.createdAt.seconds - a.createdAt.seconds); // latest first
+
+        for (const order of orders) {
+          const startDate = order.createdAt?.toDate?.() || new Date();
+          const expiryDate = new Date(startDate);
+          expiryDate.setDate(startDate.getDate() + 26);
+
+          if (new Date() <= expiryDate) {
+            const daysLeft = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
+            setSubscription({
+              plan: order.items?.[0]?.name || "Standard",
+              product: order.items?.[0]?.description || "Subscription",
+              status: order.status,
+              startDate: startDate.toISOString(),
+              expiryDate: expiryDate.toISOString(),
+              price: `₹${order.amount}`,
+              daysLeft
+            });
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching subscription:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 🔹 Fetch delivery history from attendance collection
+  const fetchAttendanceHistory = async (userId) => {
+    try {
+      const attRef = collection(db, "attendance");
+      const q = query(attRef, where("userId", "==", userId));
+      const snapshot = await getDocs(q);
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const records = await Promise.all(
+        snapshot.docs.map(async (docSnap) => {
+          const data = docSnap.data();
+          const orderRef = doc(db, "orders", data.orderId);
+          const orderSnap = await getDoc(orderRef);
+          const orderData = orderSnap.exists() ? orderSnap.data() : {};
+
+          return {
+            id: docSnap.id,
+            date: data.date,
+            status: data.status,
+            plan: orderData.items?.[0]?.name || "Unknown",
+            description: orderData.items?.[0]?.description || "Unknown",
+            amount: orderData.amount || 0,
+          };
+        })
+      );
+
+      setRecords(records);
+
+      // ✅ Filter: keep only records up to today
+      const pastAndCurrent = records.filter((rec) => {
+        const recordDate = new Date(rec.date);
+        recordDate.setHours(0, 0, 0, 0);
+        return recordDate <= today;
+      });
+
+      setAttendanceRecords(
+        pastAndCurrent.sort((a, b) => new Date(a.date) - new Date(b.date))
+      );
+    } catch (error) {
+      console.error("Error fetching delivery history:", error);
+    }
+  };
+
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      delivered: { color: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Delivered' },
+      pending: { color: 'bg-amber-100 text-amber-800 border-amber-200', label: 'N/A' },
+      not_delivered: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Not Delivered' },
+      leave_user: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Skip by Customer' },
+      leave_company: { color: 'bg-indigo-100 text-indigo-800 border-indigo-200', label: 'Company Holiday' },
+    };
+    const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800 border-gray-200', label: status };
+    return <span className={`inline-flex items-center capitalize px-1 md:px-2 py-1 rounded-full text-xs font-medium border ${config.color}`}>{config.label}</span>;
+  };
 
   if (isLoading) {
     return (
@@ -170,8 +218,8 @@ const Profile = () => {
                     <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6">
                       <div className="flex justify-between items-center">
                         <div>
-                          <h3 className="text-xl font-semibold text-white mb-2">Current Subscription</h3>
-                          <p className="text-green-100">Active plan with premium features</p>
+                          <h3 className="text-md md:text-xl font-semibold text-white mb-2">Current Subscription</h3>
+                          <p className="text-green-100 text-xs md:text-sm">Active plan with premium features</p>
                         </div>
                         <div className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold">
                           {subscription.plan}
@@ -180,7 +228,7 @@ const Profile = () => {
                     </div>
 
                     <div className="p-6">
-                      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-6">
                         <div className="text-center">
                           <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
                             <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -188,7 +236,7 @@ const Profile = () => {
                             </svg>
                           </div>
                           <h4 className="font-semibold text-gray-900">Product</h4>
-                          <p className="text-gray-600 text-sm">{subscription.product}..more</p>
+                          <p className="text-gray-600 text-sm">{subscription.product.length > 10 ? `${subscription.product.slice(0, 10)}..more` : subscription.product}</p>
                         </div>
 
                         <div className="text-center">
@@ -198,13 +246,13 @@ const Profile = () => {
                             </svg>
                           </div>
                           <h4 className="font-semibold text-gray-900">Expiry Date</h4>
-                          <p className="text-gray-600 text-sm">{new Date(subscription.expiryDate).toLocaleDateString()}</p>
+                          <p className="text-gray-600 text-sm">{new Date(subscription.expiryDate).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }).replace(/\//g, "-")}</p>
                         </div>
 
                         <div className="text-center">
                           <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
                             <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                              <text x="4" y="18" fontSize="22" fontWeight="thin" fill="currentColor">₹</text>
                             </svg>
                           </div>
                           <h4 className="font-semibold text-gray-900">Price</h4>
@@ -213,8 +261,8 @@ const Profile = () => {
 
                         <div className="text-center">
                           <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3" />
+                            <svg className="w-32 h-32 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 8v4l3 3" />
                             </svg>
                           </div>
                           <h4 className="font-semibold text-gray-900">Days Left</h4>
@@ -222,14 +270,14 @@ const Profile = () => {
                         </div>
                       </div>
 
-                      <div className="flex gap-4 mt-6">
-                        <button onClick={() => navigate("/subscription")} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition duration-200 flex items-center">
+                      <div className="flex gap-4 mt-6 text-sm md:text-base">
+                        <button onClick={() => navigate("/subscription")} className="bg-green-600 hover:bg-green-700 text-white px-4 md:px-6 py-2 rounded-lg transition duration-200 flex items-center">
                           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
                           Renew Subscription
                         </button>
-                        <button onClick={() => navigate("/subscription")} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-2 rounded-lg transition duration-200 flex items-center">
+                        <button onClick={() => navigate("/subscription")} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 md:px-6 py-2 rounded-lg transition duration-200 flex items-center">
                           <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -254,33 +302,63 @@ const Profile = () => {
                 {/* Order History */}
                 <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-8">
                   <div className="p-6 border-b border-gray-100">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Order History</h3>
+                    <h3 className="text-md md:text-lg font-semibold text-gray-900 mb-4">Delivery History</h3>
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
                           <tr className="bg-gray-50">
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                            <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">#</th>
+                            <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan</th>
+                            <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                            <th className="px-2 md:px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                          {orders.map((order, index) => (
-                            <tr key={order.id} className="hover:bg-gray-50">
-                              <td className="px-4 py-3 text-sm font-medium text-green-600">{index + 1}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900">{order.items?.[0]?.name}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900">{order.items?.[0]?.description}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900">{new Date(order.createdAt?.toDate?.()).toLocaleDateString()}</td>
-                              <td className="px-4 py-3 text-sm text-gray-900">Rs: {order.amount}</td>
-                              {/* <td className="px-4 py-3">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              {order.status}
-                            </span>
-                          </td> */}
+                          {attendanceRecords.length > 0 ? (
+                            attendanceRecords.map((record, index) => (
+                              <tr key={record.id} className="hover:bg-gray-50">
+                                <td className="px-2 md:px-4 py-3 text-xs md:text-sm font-medium text-green-600">{index + 1}</td>
+                                <td className="px-2 md:px-4 py-3 text-xs md:text-sm text-gray-900">{record.plan}</td>
+                                <td className="px-2 md:px-4 py-3 text-xs md:text-sm text-gray-900">
+                                  {new Date(record.date)
+                                    .toLocaleDateString("en-GB", {
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                      year: "numeric",
+                                    })
+                                    .replace(/\//g, "-")}
+                                </td>
+                                <td className="px-2 md:px-4 py-3 text-xs md:text-sm text-gray-900">
+                                  {getStatusBadge(record.status)}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td
+                                colSpan="4"
+                                className="px-2 md:px-4 py-6 text-center text-gray-500 text-sm"
+                              >
+                                {(() => {
+                                  if (records.length > 0) {
+                                    // find first delivery date
+                                    const firstDate = new Date(
+                                      Math.min(...records.map((r) => new Date(r.date).getTime()))
+                                    );
+                                    firstDate.setHours(0, 0, 0, 0);
+
+                                    const today = new Date();
+                                    today.setHours(0, 0, 0, 0);
+
+                                    if (today < firstDate) {
+                                      return "Your delivery starts tomorrow onwards";
+                                    }
+                                  }
+                                  return "No records found";
+                                })()}
+                              </td>
                             </tr>
-                          ))}
+                          )}
                         </tbody>
                       </table>
                     </div>
@@ -329,13 +407,7 @@ const Profile = () => {
                   {/* Actions */}
                   <div className="p-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Account Actions</h3>
-                    <div className="flex flex-wrap gap-4">
-                      {/* <button className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg transition duration-200 flex items-center">
-                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    Edit Profile
-                  </button> */}
+                    <div className="flex flex-wrap gap-4 text-sm md:text-base">
                       <button onClick={() => navigate("/forgot-password")} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-2 rounded-lg transition duration-200 flex items-center">
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />

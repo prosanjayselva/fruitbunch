@@ -22,10 +22,10 @@ const AttendanceModal = ({ order, onClose, onStatusUpdate, onCancelDay }) => {
   const getStatusBadge = (status) => {
     const statusConfig = {
       delivered: { color: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Delivered' },
-      pending: { color: 'bg-amber-100 text-amber-800 border-amber-200', label: 'Pending' },
+      pending: { color: 'bg-amber-100 text-amber-800 border-amber-200', label: 'N/A' },
       not_delivered: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Not Delivered' },
-      cancelled: { color: 'bg-gray-100 text-gray-800 border-gray-200', label: 'Cancelled' },
-      leave: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Leave' }
+      leave_user: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'User Leave' },
+      leave_company: { color: 'bg-indigo-100 text-indigo-800 border-indigo-200', label: 'Company Leave' },
     };
     const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800 border-gray-200', label: status };
     return <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${config.color}`}>{config.label}</span>;
@@ -88,7 +88,7 @@ const AttendanceModal = ({ order, onClose, onStatusUpdate, onCancelDay }) => {
                   className="w-full h-64 rounded-xl"
                 >
                   <TileLayer
-                    attribution='&copy; <a href="https://www.google.com/maps">Google</a>'
+                    attribution={false}
                     url="https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}"
                     subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
                   />

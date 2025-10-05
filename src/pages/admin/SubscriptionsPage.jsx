@@ -22,6 +22,7 @@ const SubscriptionsPage = () => {
         id: doc.id,
         ...doc.data(),
         createdAt: doc.data().createdAt?.toDate?.() || new Date(),
+        expiryDate: doc.data().expiryDate?.toDate?.() || null,
       }));
 
       const usersSnapshot = await getDocs(collection(db, "users"));
@@ -33,11 +34,11 @@ const SubscriptionsPage = () => {
 
         let activeSubscription = null;
         if (latestOrder) {
-          const daysLeft = calculateDaysLeft(latestOrder.createdAt);
+          const daysLeft = calculateDaysLeft(latestOrder.expiryDate);
           activeSubscription = {
             ...latestOrder,
             daysLeft,
-            status: calculateSubscriptionStatus(latestOrder.createdAt),
+            status: calculateSubscriptionStatus(latestOrder.expiryDate),
             location: latestOrder.shipping?.location || null
           };
         }
@@ -59,19 +60,15 @@ const SubscriptionsPage = () => {
     }
   };
 
-  const calculateDaysLeft = (startDate, extraDays = 0) => {
-    if (!startDate) return 0;
-    const start = new Date(startDate);
-    const baseValidityDays = 26;
-    const expiryDate = new Date(start);
-    expiryDate.setDate(start.getDate() + baseValidityDays + extraDays);
+  const calculateDaysLeft = (expiryDate) => {
+    if (!expiryDate) return 0;
     const now = new Date();
-    const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-    return Math.max(0, daysLeft);
+    const expiry = new Date(expiryDate);
+    return Math.max(0, Math.ceil((expiry - now) / (1000 * 60 * 60 * 24)));
   };
 
-  const calculateSubscriptionStatus = (startDate, extraDays = 0) => {
-    const daysLeft = calculateDaysLeft(startDate, extraDays);
+  const calculateSubscriptionStatus = (startDate) => {
+    const daysLeft = calculateDaysLeft(startDate);
     if (daysLeft === 0) return "expired";
     if (daysLeft <= 7) return "expiring_soon";
     return "active";
@@ -113,16 +110,17 @@ const SubscriptionsPage = () => {
           <p className="text-emerald-700 text-sm">Active subscriptions and customer management</p>
         </div>
         <div className="flex space-x-2">
-          {["all", "active", "expiring_soon", "expired", "not_subscribed"].map(option => (
-            <button
-              key={option}
-              onClick={() => setFilter(option)}
-              className={`px-3 py-1 rounded-full text-xs font-medium border transition ${filter === option ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-700"
-                }`}
-            >
-              {option.replace("_", " ").toUpperCase()}
-            </button>
-          ))}
+          <select
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            className="px-3 py-2 rounded-lg border border-emerald-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="all">All</option>
+            <option value="active">Active</option>
+            <option value="expiring_soon">Expiring Soon</option>
+            <option value="expired">Expired</option>
+            <option value="not_subscribed">Not Subscribed</option>
+          </select>
         </div>
       </div>
       <div className="overflow-x-auto">

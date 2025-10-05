@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy, doc, updateDoc, Timestamp, arrayUnion } from 'firebase/firestore';
+import {
+  collection, getDocs, query, orderBy, where,
+  doc, updateDoc, addDoc, getDoc, Timestamp
+} from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
 import AttendanceModal from '../../components/models/AttendanceModal';
 
@@ -21,17 +24,20 @@ const AttendancePage = () => {
     }
   }, [selectedDate, orders]);
 
+  // 🔹 Fetch active orders
   const fetchOrders = async () => {
     try {
       setLoading(true);
       const ordersQuery = query(collection(db, "orders"), orderBy("createdAt", "desc"));
       const ordersSnapshot = await getDocs(ordersQuery);
-      const ordersData = ordersSnapshot.docs.map(doc => {
-        const data = doc.data();
+      const ordersData = ordersSnapshot.docs.map(docSnap => {
+        const data = docSnap.data();
         return {
-          id: doc.id,
+          id: docSnap.id,
           ...data,
           createdAt: data.createdAt?.toDate?.() || new Date(),
+          expiryDate: data.expiryDate?.toDate?.() || null,
+          customerName: `${data.shipping?.firstName || ''} ${data.shipping?.lastName || ''}`.trim() || 'Unknown Customer',
           shippingAddress: {
             address: data.shipping?.address || '',
             city: data.shipping?.city || '',
@@ -44,124 +50,141 @@ const AttendancePage = () => {
       });
       setOrders(ordersData);
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error("Error fetching orders:", error);
     } finally {
       setLoading(false);
     }
   };
 
+  // 🔹 Fetch attendance logs for the selected date
   const fetchAttendanceData = async () => {
     try {
-      const selected = new Date(selectedDate);
+      const attendanceQuery = query(
+        collection(db, "attendance"),
+        where("date", "==", selectedDate)
+      );
+      const snapshot = await getDocs(attendanceQuery);
+      const attendanceRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      const selectedOrders = orders.map(order => {
-        const extraDays = order.extraDays || 0;
-        const daysLeft = calculateDaysLeft(order.createdAt, extraDays);
-        const subscriptionStatus = calculateSubscriptionStatus(order.createdAt, extraDays);
+      // Merge with orders
+      const merged = orders
+        .filter(order => {
+          if (!order.expiryDate) return false;
 
-        return {
-          ...order,
-          daysLeft,
-          subscriptionStatus,
-          customerName: `${order.shipping?.firstName || ''} ${order.shipping?.lastName || ''}`.trim() || 'Unknown Customer'
-        };
-      }).filter(order => {
-        const startDate = new Date(order.createdAt);
-        const baseValidityDays = 26;
-        const totalValidityDays = baseValidityDays + (order.extraDays || 0);
+          // Exclude orders placed today
+          const orderDate = order.createdAt.toISOString().split('T')[0];
+          if (orderDate === selectedDate) return false;
 
-        const endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + totalValidityDays - 1);
-
-        return selected >= startDate && selected <= endDate;
-      });
+          return new Date(selectedDate) <= order.expiryDate;
+        })
+        .map(order => {
+          const attendance = attendanceRecords.find(a => a.orderId === order.id);
+          return {
+            ...order,
+            deliveryStatus: attendance?.status || "pending",
+            attendanceId: attendance?.id || null,
+            daysLeft: calculateDaysLeft(order.expiryDate),
+          };
+        });
 
       setAttendanceData({
         date: selectedDate,
-        totalOrders: selectedOrders.length,
-        delivered: selectedOrders.filter(o => o.deliveryStatus === "delivered").length,
-        notDelivered: selectedOrders.filter(o =>
-          !o.deliveryStatus ||
-          o.deliveryStatus === "pending" ||
-          o.deliveryStatus === "not_delivered" ||
-          o.deliveryStatus === "cancelled"
+        totalOrders: merged.length,
+        delivered: merged.filter(o => o.deliveryStatus === "delivered").length,
+        notDelivered: merged.filter(o =>
+          ["pending", "not_delivered"].includes(o.deliveryStatus)
         ).length,
-        orders: selectedOrders
+        orders: merged
       });
     } catch (error) {
       console.error("Error fetching attendance data:", error);
     }
   };
 
-  const calculateDaysLeft = (startDate, extraDays = 0) => {
-    if (!startDate) return 0;
-    const start = new Date(startDate);
-    const baseValidityDays = 26;
-    const totalValidityDays = baseValidityDays + (extraDays || 0);
-    const expiryDate = new Date(start);
-    expiryDate.setDate(start.getDate() + totalValidityDays);
+  // 🔹 Days left (from expiryDate only)
+  const calculateDaysLeft = (expiryDate) => {
+    if (!expiryDate) return 0;
     const now = new Date();
-    const daysLeft = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24));
-    return Math.max(0, daysLeft);
+    const expiry = new Date(expiryDate);
+    return Math.max(0, Math.ceil((expiry - now) / (1000 * 60 * 60 * 24)));
   };
 
-  const calculateSubscriptionStatus = (startDate, extraDays = 0) => {
-    const daysLeft = calculateDaysLeft(startDate, extraDays);
-    if (daysLeft === 0) return 'expired';
-    if (daysLeft <= 7) return 'expiring_soon';
-    return 'active';
-  };
-
-  const updateDeliveryStatus = async (orderId, status) => {
+  // 🔹 Update single order status
+  const updateDeliveryStatus = async (order, status) => {
     try {
-      const orderRef = doc(db, "orders", orderId);
-      await updateDoc(orderRef, {
-        deliveryStatus: status,
-        updatedAt: Timestamp.now()
-      });
-      
-      // Update local state
-      setOrders(prev => prev.map(order => 
-        order.id === orderId ? { ...order, deliveryStatus: status } : order
-      ));
-      
-      if (selectedOrder?.id === orderId) {
-        setSelectedOrder(prev => ({ ...prev, deliveryStatus: status }));
+      let finalStatus = status;
+
+      // If customer not available → still mark as delivered
+      if (status === "not_delivered") {
+        finalStatus = "delivered";
       }
+
+      if (order.attendanceId) {
+        // update existing attendance doc
+        const attRef = doc(db, "attendance", order.attendanceId);
+        await updateDoc(attRef, {
+          status,
+          updatedAt: Timestamp.now()
+        });
+      } else {
+        // create new attendance doc
+        await addDoc(collection(db, "attendance"), {
+          orderId: order.id,
+          userId: order.userId,
+          date: selectedDate,
+          status,
+          updatedAt: Timestamp.now(),
+        });
+      }
+
+      // Always update order.deliveryStatus
+      const orderRef = doc(db, "orders", order.id);
+      await updateDoc(orderRef, {
+        deliveryStatus: finalStatus,
+        updatedAt: Timestamp.now(),
+      });
 
       fetchAttendanceData();
     } catch (error) {
-      console.error('Error updating delivery status:', error);
-      alert('Error updating delivery status');
+      console.error("Error updating delivery status:", error);
     }
   };
 
-  const handleCancelDay = async (orderId) => {
+  const markUserSkip = async (order) => {
     try {
-      const order = orders.find(o => o.id === orderId);
-      if (!order) {
-        alert("Order not found");
+      // 1. Check if skip already exists for this order + date
+      const q = query(
+        collection(db, "attendance"),
+        where("orderId", "==", order.id),
+        where("date", "==", selectedDate)
+      );
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        alert("Skip already marked for this order on this date.");
         return;
       }
 
-      const orderRef = doc(db, "orders", orderId);
-      const currentExtraDays = order.extraDays || 0;
-
-      await updateDoc(orderRef, {
-        extraDays: currentExtraDays + 1,
-        deliveryStatus: "cancelled",
+      // 2. Insert skip
+      await addDoc(collection(db, "attendance"), {
+        orderId: order.id,
+        userId: order.userId,
+        date: selectedDate,
+        status: "leave_user",
         updatedAt: Timestamp.now(),
-        events: arrayUnion({
-          type: "cancel",
-          date: new Date().toISOString(),
-        }),
       });
 
-      await fetchOrders();
-      alert("Cancelled today for this user. Timeline extended by 1 day.");
+      // 3. Extend expiry date +1
+      const orderRef = doc(db, "orders", order.id);
+      const orderSnap = await getDoc(orderRef);
+      const currentExpiry = orderSnap.data().expiryDate.toDate();
+      const newExpiry = new Date(currentExpiry);
+      newExpiry.setDate(newExpiry.getDate() + 1);
+
+      await updateDoc(orderRef, { expiryDate: Timestamp.fromDate(newExpiry) });
+      fetchAttendanceData();
     } catch (error) {
-      console.error("Error cancelling day:", error);
-      alert("Error cancelling delivery");
+      console.error("Error marking user skip:", error);
     }
   };
 
@@ -169,27 +192,43 @@ const AttendancePage = () => {
     try {
       const todayOrders = attendanceData.orders || [];
 
-      const updatePromises = todayOrders.map(async (order) => {
-        const orderRef = doc(db, "orders", order.id);
-        const currentExtraDays = order.extraDays || 0;
+      const promises = todayOrders.map(async (order) => {
+        // 1. Check if skip already exists
+        const q = query(
+          collection(db, "attendance"),
+          where("orderId", "==", order.id),
+          where("date", "==", selectedDate)
+        );
+        const snap = await getDocs(q);
 
-        return updateDoc(orderRef, {
-          extraDays: currentExtraDays + 1,
-          deliveryStatus: "leave",
+        if (!snap.empty) {
+          console.log(`Skip already exists for order ${order.id}, skipping insert.`);
+          return;
+        }
+
+        // 2. Insert company skip
+        await addDoc(collection(db, "attendance"), {
+          orderId: order.id,
+          userId: order.userId,
+          date: selectedDate,
+          status: "leave_company",
           updatedAt: Timestamp.now(),
-          events: arrayUnion({
-            type: "global_leave",
-            date: new Date().toISOString(),
-          }),
         });
+
+        // 3. Extend expiry date +1
+        const orderRef = doc(db, "orders", order.id);
+        if (order.expiryDate) {
+          const newExpiry = new Date(order.expiryDate);
+          newExpiry.setDate(newExpiry.getDate() + 1);
+          await updateDoc(orderRef, { expiryDate: Timestamp.fromDate(newExpiry) });
+        }
       });
 
-      await Promise.all(updatePromises);
-      await fetchOrders();
-      alert("Marked today as leave. Timeline extended by 1 day for all users.");
+      await Promise.all(promises);
+      fetchAttendanceData();
+      alert("Marked global leave for today. All expiry dates extended.");
     } catch (error) {
-      console.error("Error marking leave:", error);
-      alert("Error marking leave for all users");
+      console.error("Error marking global leave:", error);
     }
   };
 
@@ -201,10 +240,10 @@ const AttendancePage = () => {
   const getStatusBadge = (status) => {
     const statusConfig = {
       delivered: { color: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Delivered' },
-      pending: { color: 'bg-amber-100 text-amber-800 border-amber-200', label: 'Pending' },
+      pending: { color: 'bg-amber-100 text-amber-800 border-amber-200', label: 'N/A' },
       not_delivered: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Not Delivered' },
-      cancelled: { color: 'bg-gray-100 text-gray-800 border-gray-200', label: 'Cancelled' },
-      leave: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Leave' }
+      leave_user: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Skip by Customer' },
+      leave_company: { color: 'bg-indigo-100 text-indigo-800 border-indigo-200', label: 'Company Holiday' },
     };
     const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800 border-gray-200', label: status };
     return <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${config.color}`}>{config.label}</span>;
@@ -224,13 +263,12 @@ const AttendancePage = () => {
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl shadow-sm border border-emerald-100 overflow-hidden">
+        {/* Header */}
         <div className="px-4 lg:px-6 py-5 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-100">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div>
               <h2 className="text-lg lg:text-xl font-semibold text-gray-900">Daily Attendance</h2>
-              <p className="text-emerald-700 text-sm">
-                Track delivery performance for {selectedDate}
-              </p>
+              <p className="text-emerald-700 text-sm">Track delivery performance for {selectedDate}</p>
             </div>
             <div className="flex items-center space-x-4">
               <input
@@ -243,34 +281,20 @@ const AttendancePage = () => {
           </div>
         </div>
 
+        {/* Stats */}
         <div className="p-4 lg:p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6 mb-6 lg:mb-8">
             <div className="bg-gradient-to-br from-emerald-500 to-green-500 p-4 lg:p-6 rounded-2xl text-white shadow-lg">
-              <div className="text-2xl lg:text-3xl font-bold">
-                {attendanceData.totalOrders || 0}
-              </div>
+              <div className="text-2xl lg:text-3xl font-bold">{attendanceData.totalOrders || 0}</div>
               <div className="text-emerald-100 text-sm lg:text-base">Total Orders</div>
-              <div className="text-xs text-emerald-200 mt-2">
-                All scheduled deliveries
-              </div>
             </div>
             <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-4 lg:p-6 rounded-2xl text-white shadow-lg">
-              <div className="text-2xl lg:text-3xl font-bold">
-                {attendanceData.delivered || 0}
-              </div>
+              <div className="text-2xl lg:text-3xl font-bold">{attendanceData.delivered || 0}</div>
               <div className="text-emerald-100 text-sm lg:text-base">Successful Deliveries</div>
-              <div className="text-xs text-emerald-200 mt-2">
-                Completed orders
-              </div>
             </div>
             <div className="bg-gradient-to-br from-amber-500 to-orange-500 p-4 lg:p-6 rounded-2xl text-white shadow-lg">
-              <div className="text-2xl lg:text-3xl font-bold">
-                {attendanceData.notDelivered || 0}
-              </div>
+              <div className="text-2xl lg:text-3xl font-bold">{attendanceData.notDelivered || 0}</div>
               <div className="text-amber-100 text-sm lg:text-base">Pending Actions</div>
-              <div className="text-xs text-amber-200 mt-2">
-                Requires attention
-              </div>
             </div>
           </div>
 
@@ -279,26 +303,20 @@ const AttendancePage = () => {
               onClick={handleGlobalLeave}
               className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors text-sm lg:text-base"
             >
-              Mark Today as Leave for All
+              Mark Today as Company Holiday
             </button>
           </div>
 
+          {/* Table */}
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Customer
-                  </th>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Days Left
-                  </th>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Delivery Status
-                  </th>
-                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Actions
-                  </th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Customer</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Days Left</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Preferred Time</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Delivery Status</th>
+                  <th className="px-4 lg:px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -325,42 +343,25 @@ const AttendancePage = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                      <div className="text-center">
-                        <div className={`text-lg font-bold ${order.daysLeft <= 7 ? 'text-amber-600' : 'text-emerald-600'}`}>
-                          {order.daysLeft}
-                        </div>
-                        <div className="text-xs text-gray-500">days remaining</div>
-                      </div>
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(order.deliveryStatus || 'pending')}
-                    </td>
-                    <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="px-4 lg:px-6 py-4">{order.daysLeft}</td>
+                    <td className="px-4 lg:px-6 py-4">{order.preferredTime || "Not Set"}</td>
+                    <td className="px-4 lg:px-6 py-4">{getStatusBadge(order.deliveryStatus)}</td>
+                    <td className="px-4 lg:px-6 py-4">
                       <select
-                        value={order.deliveryStatus || 'pending'}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === "cancel") {
-                            handleCancelDay(order.id);
-                          } else {
-                            updateDeliveryStatus(order.id, value);
-                          }
-                        }}
-                        className="text-sm border border-emerald-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        value={order.deliveryStatus}
+                        onChange={(e) => updateDeliveryStatus(order, e.target.value)}
+                        className="text-sm border border-emerald-200 rounded-lg px-2 py-1"
                       >
-                        <option value="pending">Pending</option>
                         <option value="delivered">Delivered</option>
-                        <option value="not_delivered">Not Delivered</option>
-                        <option value="leave">Leave</option>
-                        <option value="cancel">Cancel Today</option>
+                        <option value="not_delivered">Customer not available</option>
+                        <option value="leave_user">Skip by Customer</option>
                       </select>
                     </td>
                   </tr>
                 ))}
                 {(!attendanceData.orders || attendanceData.orders.length === 0) && (
                   <tr>
-                    <td colSpan="4" className="px-6 py-4 text-center text-gray-500">
+                    <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
                       No deliveries scheduled for {selectedDate}
                     </td>
                   </tr>
@@ -371,13 +372,13 @@ const AttendancePage = () => {
         </div>
       </div>
 
-      {/* Order Details Modal */}
+      {/* Modal */}
       {showModal && selectedOrder && (
         <AttendanceModal
           order={selectedOrder}
           onClose={() => setShowModal(false)}
-          onStatusUpdate={updateDeliveryStatus}
-          onCancelDay={handleCancelDay}
+          onStatusUpdate={(id, status) => updateDeliveryStatus({ id, ...selectedOrder }, status)}
+          onCancelDay={markUserSkip}
         />
       )}
     </div>

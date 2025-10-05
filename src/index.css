@@ -52,3 +52,7 @@
   scrollbar-width: thin;
   scrollbar-color: #43A047 #E6F4EA; /* thumb color | track color */
 }
+
+#page-content {
+  transition: opacity 0.3s ease;
+}
