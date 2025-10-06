@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, updateDoc, doc } from 'firebase/firestore';
 import { db } from '../../../firebaseConfig';
 
 const OrdersPage = () => {
@@ -91,7 +91,7 @@ const OrdersPage = () => {
             <p className="text-emerald-700 text-sm">Track and manage all delivery orders</p>
           </div>
           <div className="text-xl lg:text-2xl text-emerald-600">
-            <i className="fas fa-boxes"></i> {filteredOrders.length} 
+            <i className="fas fa-boxes"></i> {filteredOrders.length}
           </div>
         </div>
 
@@ -172,16 +172,18 @@ const OrdersPage = () => {
                       {order.paymentMethod || 'N/A'}
                     </td>
                     <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
-                      {order.paymentMethod === 'cod' && order.paymentStatus === 'Pending' ? (
-                        <button
-                          onClick={() => handleMarkPaid(order)}
-                          className="px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
-                        >
-                          Mark as Paid
-                        </button>
-                      ) : (
-                        getPaymentStatusBadge(order.paymentStatus || 'Pending')
-                      )}
+                      <div className="flex items-center gap-2">
+                        {getPaymentStatusBadge(order.paymentStatus || 'Pending')}
+
+                        {order.paymentMethod === 'COD' && order.paymentStatus === 'Pending' && (
+                          <button
+                            onClick={() => handleMarkPaid(order)}
+                            className="px-3 py-1 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition"
+                          >
+                            Mark as Paid
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );

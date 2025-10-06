@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import 'leaflet/dist/leaflet.css';
-import { addDoc, collection, serverTimestamp, getDocs, updateDoc, Timestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp, getDocs, updateDoc, Timestamp, query, where } from "firebase/firestore";
 import axios from "axios";
 import { auth, db } from '../../firebaseConfig';
 
@@ -22,24 +22,36 @@ const verifyPaymentUrl = import.meta.env.VITE_API_VERIFY_PAYMENT;
 const initializeAttendance = async (orderId, userId, startDate, expiryDate) => {
   const attendanceRef = collection(db, "attendance");
 
-  let current = new Date(startDate.toDate());
+  let start = startDate instanceof Timestamp ? startDate.toDate() : startDate;
+  let end = expiryDate instanceof Timestamp ? expiryDate.toDate() : expiryDate;
+
+  let days = [];
+  let current = new Date(start);
   current.setDate(current.getDate() + 1);
-  const end = expiryDate.toDate();
+  end = new Date(end);
 
   while (current <= end) {
-    const dateStr = current.toISOString().split("T")[0]; // YYYY-MM-DD
-
-    await addDoc(attendanceRef, {
-      orderId,
-      userId,
-      date: dateStr,
-      status: "pending",     // default = awaiting delivery
-      updatedAt: Timestamp.now()
-    });
-
+    const dateStr = current.toISOString().split("T")[0];
+    days.push({ date: dateStr, status: "pending" });
     current.setDate(current.getDate() + 1);
   }
+
+  await addDoc(attendanceRef, {
+    orderId,
+    userId,
+    days,
+    updatedAt: Timestamp.now(),
+  });
 };
+
+function generateOrderId() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = 'order_';
+  for (let i = 0; i < 14; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
 
 const Checkout = () => {
   const { cartItems, cartTotal, clearCart } = useCart();
@@ -218,8 +230,26 @@ const Checkout = () => {
     setProcessingPayment(true);
 
     try {
+      const q = query(
+        collection(db, "orders"),
+        where("userId", "==", user?.uid),
+        where("status", "in", ["Pending", "Pending (COD)", "Confirmed"])
+      );
+      const existingOrders = await getDocs(q);
+
+      if (!existingOrders.empty) {
+        const proceed = window.confirm(
+          "You already have an active order. Do you still want to place another one?"
+        );
+        if (!proceed) {
+          setProcessingPayment(false);
+          return; // stop checkout
+        }
+      }
+
       if (paymentMethod === "cod") {
         // COD Order
+        const codOrderId = generateOrderId();
         const orderRef = await addDoc(collection(db, "orders"), {
           userId: user?.uid,
           items: cartItems,
@@ -230,6 +260,7 @@ const Checkout = () => {
           paymentStatus: "Pending",
           deliveryStatus: "N/A",
           preferredTime: deliveryTime,
+          razorpayOrderId: codOrderId,
           expiryDate: getExpiryDate(),
           createdAt: serverTimestamp(),
           shipping: {
@@ -255,7 +286,7 @@ const Checkout = () => {
 
         clearCart();
         navigate("/orderconfirmation", {
-          state: { orderId: orderRef.id, payment: "cod" },
+          state: { orderId: codOrderId, payment: "cod" },
         });
 
         setProcessingPayment(false);
@@ -329,28 +360,34 @@ const Checkout = () => {
                 createdAt: serverTimestamp(),
               });
 
-              const orderQuery = collection(db, "orders");
-              const orderDocs = await getDocs(orderQuery);
-              const matchedOrder = orderDocs.docs.find(doc => doc.data().razorpayOrderId === orderId);
+              const q = query(
+                collection(db, "orders"),
+                where("razorpayOrderId", "==", orderId)
+              );
+              const snap = await getDocs(q);
 
-              if (matchedOrder) {
+              if (!snap.empty) {
+                const matchedOrder = snap.docs[0];
+
                 await updateDoc(matchedOrder.ref, {
                   paymentStatus: "Paid",
                   status: "Confirmed"
                 });
-              }
-              
-              await initializeAttendance(
-                matchedOrder.id,
-                user?.uid,
-                matchedOrder.data().createdAt || new Date(),
-                matchedOrder.data().expiryDate
-              );
 
-              clearCart();
-              navigate("/orderconfirmation", {
-                state: { orderId, payment: paymentMethod },
-              });
+                await initializeAttendance(
+                  matchedOrder.id,
+                  user?.uid,
+                  matchedOrder.data().createdAt || new Date(),
+                  matchedOrder.data().expiryDate
+                );
+
+                clearCart();
+                navigate("/orderconfirmation", {
+                  state: { orderId, payment: paymentMethod },
+                });
+              } else {
+                console.warn("No matching order found for verification!");
+              }
             } else {
               alert("Payment verification failed!");
             }

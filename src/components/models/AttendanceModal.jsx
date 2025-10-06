@@ -102,7 +102,7 @@ const AttendanceModal = ({ order, onClose, onStatusUpdate, onCancelDay }) => {
               </div>
             )}
 
-            <div>
+            {/* <div>
               <h4 className="font-semibold text-gray-900 mb-4 text-lg">Update Delivery Status</h4>
               <select
                 value={order.deliveryStatus || 'pending'}
@@ -124,7 +124,7 @@ const AttendanceModal = ({ order, onClose, onStatusUpdate, onCancelDay }) => {
                 <option value="leave">Leave</option>
                 <option value="cancel">Cancel Today</option>
               </select>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

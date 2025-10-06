@@ -49,6 +49,7 @@ const Profile = () => {
               plan: order.items?.[0]?.name || "Standard",
               product: order.items?.[0]?.description || "Subscription",
               status: order.status,
+              paymentStatus: order.paymentStatus,
               startDate: startDate.toISOString(),
               expiryDate: expiryDate.toISOString(),
               price: `₹${order.amount}`,
@@ -75,38 +76,42 @@ const Profile = () => {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
-      const records = await Promise.all(
-        snapshot.docs.map(async (docSnap) => {
-          const data = docSnap.data();
-          const orderRef = doc(db, "orders", data.orderId);
-          const orderSnap = await getDoc(orderRef);
-          const orderData = orderSnap.exists() ? orderSnap.data() : {};
+      let records = [];
 
-          return {
-            id: docSnap.id,
-            date: data.date,
-            status: data.status,
-            plan: orderData.items?.[0]?.name || "Unknown",
-            description: orderData.items?.[0]?.description || "Unknown",
-            amount: orderData.amount || 0,
-          };
-        })
-      );
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
 
-      setRecords(records);
+        // Get related order
+        const orderRef = doc(db, "orders", data.orderId);
+        const orderSnap = await getDoc(orderRef);
+        const orderData = orderSnap.exists() ? orderSnap.data() : {};
 
-      // ✅ Filter: keep only records up to today
+        // Expand each day in `days[]` into its own record
+        const dailyRecords = data.days.map((d) => ({
+          id: docSnap.id, // attendance doc id (same for all days)
+          date: d.date,
+          status: d.status,
+          plan: orderData.items?.[0]?.name || "Unknown",
+          description: orderData.items?.[0]?.description || "Unknown",
+          amount: orderData.amount || 0,
+        }));
+
+        records.push(...dailyRecords);
+      }
+
+      // ✅ Filter: only past + current days
       const pastAndCurrent = records.filter((rec) => {
         const recordDate = new Date(rec.date);
         recordDate.setHours(0, 0, 0, 0);
         return recordDate <= today;
       });
 
+      // Sort chronologically
       setAttendanceRecords(
         pastAndCurrent.sort((a, b) => new Date(a.date) - new Date(b.date))
       );
     } catch (error) {
-      console.error("Error fetching delivery history:", error);
+      console.error("Error fetching attendance history:", error);
     }
   };
 
@@ -221,8 +226,13 @@ const Profile = () => {
                           <h3 className="text-md md:text-xl font-semibold text-white mb-2">Current Subscription</h3>
                           <p className="text-green-100 text-xs md:text-sm">Active plan with premium features</p>
                         </div>
-                        <div className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold">
-                          {subscription.plan}
+                        <div className="flex space-x-2">
+                          <div className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold">
+                            {subscription.paymentStatus}
+                          </div>
+                          <div className="bg-white text-green-600 px-4 py-2 rounded-full font-semibold">
+                            {subscription.plan}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -276,13 +286,6 @@ const Profile = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
                           Renew Subscription
-                        </button>
-                        <button onClick={() => navigate("/subscription")} className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 md:px-6 py-2 rounded-lg transition duration-200 flex items-center">
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                          Change Plan
                         </button>
                       </div>
                     </div>
@@ -341,7 +344,7 @@ const Profile = () => {
                               >
                                 {(() => {
                                   if (records.length > 0) {
-                                    // find first delivery date
+                                    // Find earliest delivery date
                                     const firstDate = new Date(
                                       Math.min(...records.map((r) => new Date(r.date).getTime()))
                                     );
@@ -351,9 +354,14 @@ const Profile = () => {
                                     today.setHours(0, 0, 0, 0);
 
                                     if (today < firstDate) {
-                                      return "Your delivery starts tomorrow onwards";
+                                      return `Your delivery starts from ${firstDate.toDateString()}`;
                                     }
+
+                                    // If today >= firstDate but still no matching attendance
+                                    return "No attendance records for today yet";
                                   }
+
+                                  // If no records exist at all
                                   return "No records found";
                                 })()}
                               </td>

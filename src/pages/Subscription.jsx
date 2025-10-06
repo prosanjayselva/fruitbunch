@@ -123,8 +123,22 @@ const Subscription = () => {
       alert("Please subscribe to a plan before adding drinks!");
       return;
     }
-    addToCart(product);
-    navigate('/cart')
+
+    let finalProduct = { ...product };
+
+    // Special case: daily add-ons (like Greek Yogurt)
+    if (product.isDaily) {
+      const days = 26; // You can make this dynamic later
+      finalProduct = {
+        ...product,
+        price: product.price * days,
+        days,
+        note: `${product.price} per day × ${days} days`
+      };
+    }
+
+    addToCart(finalProduct);
+    navigate('/cart');
   };
 
   const handleSubscribe = (product) => {

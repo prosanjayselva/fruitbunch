@@ -59,12 +59,17 @@ const AttendancePage = () => {
   // 🔹 Fetch attendance logs for the selected date
   const fetchAttendanceData = async () => {
     try {
+      // Get all attendance docs for current orders
       const attendanceQuery = query(
         collection(db, "attendance"),
-        where("date", "==", selectedDate)
+        where("orderId", "in", orders.map(o => o.id))
       );
       const snapshot = await getDocs(attendanceQuery);
-      const attendanceRecords = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      const attendanceRecords = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
 
       // Merge with orders
       const merged = orders
@@ -72,17 +77,21 @@ const AttendancePage = () => {
           if (!order.expiryDate) return false;
 
           // Exclude orders placed today
-          const orderDate = order.createdAt.toISOString().split('T')[0];
+          const orderDate = order.createdAt.toISOString().split("T")[0];
           if (orderDate === selectedDate) return false;
 
           return new Date(selectedDate) <= order.expiryDate;
         })
         .map(order => {
-          const attendance = attendanceRecords.find(a => a.orderId === order.id);
+          const att = attendanceRecords.find(a => a.orderId === order.id);
+
+          // Look up selectedDate inside days[]
+          const dayStatus = att?.days?.find(d => d.date === selectedDate)?.status || "pending";
+
           return {
             ...order,
-            deliveryStatus: attendance?.status || "pending",
-            attendanceId: attendance?.id || null,
+            deliveryStatus: dayStatus,
+            attendanceId: att?.id || null,
             daysLeft: calculateDaysLeft(order.expiryDate),
           };
         });
@@ -119,25 +128,32 @@ const AttendancePage = () => {
         finalStatus = "delivered";
       }
 
-      if (order.attendanceId) {
-        // update existing attendance doc
-        const attRef = doc(db, "attendance", order.attendanceId);
-        await updateDoc(attRef, {
-          status,
-          updatedAt: Timestamp.now()
-        });
-      } else {
-        // create new attendance doc
-        await addDoc(collection(db, "attendance"), {
-          orderId: order.id,
-          userId: order.userId,
-          date: selectedDate,
-          status,
-          updatedAt: Timestamp.now(),
-        });
+      if (!order.attendanceId) {
+        console.error("No attendanceId found for order:", order.id);
+        return;
       }
 
-      // Always update order.deliveryStatus
+      const attRef = doc(db, "attendance", order.attendanceId);
+      const attSnap = await getDoc(attRef);
+
+      if (!attSnap.exists()) {
+        console.error("Attendance document not found for order:", order.id);
+        return;
+      }
+
+      let { days } = attSnap.data();
+
+      // Update only the selectedDate
+      days = days.map(d =>
+        d.date === selectedDate ? { ...d, status } : d
+      );
+
+      await updateDoc(attRef, {
+        days,
+        updatedAt: Timestamp.now(),
+      });
+
+      // Update order record as well
       const orderRef = doc(db, "orders", order.id);
       await updateDoc(orderRef, {
         deliveryStatus: finalStatus,
@@ -152,36 +168,44 @@ const AttendancePage = () => {
 
   const markUserSkip = async (order) => {
     try {
-      // 1. Check if skip already exists for this order + date
-      const q = query(
-        collection(db, "attendance"),
-        where("orderId", "==", order.id),
-        where("date", "==", selectedDate)
-      );
-      const snap = await getDocs(q);
+      if (!order.attendanceId) {
+        console.error("No attendanceId found for order:", order.id);
+        return;
+      }
 
-      if (!snap.empty) {
+      const attRef = doc(db, "attendance", order.attendanceId);
+      const attSnap = await getDoc(attRef);
+
+      if (!attSnap.exists()) return;
+
+      let { days } = attSnap.data();
+      const dayIndex = days.findIndex(d => d.date === selectedDate);
+
+      if (dayIndex === -1) {
+        alert("No attendance entry found for this date.");
+        return;
+      }
+
+      if (days[dayIndex].status === "leave_user") {
         alert("Skip already marked for this order on this date.");
         return;
       }
 
-      // 2. Insert skip
-      await addDoc(collection(db, "attendance"), {
-        orderId: order.id,
-        userId: order.userId,
-        date: selectedDate,
-        status: "leave_user",
-        updatedAt: Timestamp.now(),
-      });
+      // Update status
+      days[dayIndex].status = "leave_user";
 
-      // 3. Extend expiry date +1
+      await updateDoc(attRef, { days, updatedAt: Timestamp.now() });
+
+      // Extend expiry by +1
       const orderRef = doc(db, "orders", order.id);
       const orderSnap = await getDoc(orderRef);
       const currentExpiry = orderSnap.data().expiryDate.toDate();
+
       const newExpiry = new Date(currentExpiry);
       newExpiry.setDate(newExpiry.getDate() + 1);
 
       await updateDoc(orderRef, { expiryDate: Timestamp.fromDate(newExpiry) });
+
       fetchAttendanceData();
     } catch (error) {
       console.error("Error marking user skip:", error);
@@ -193,38 +217,42 @@ const AttendancePage = () => {
       const todayOrders = attendanceData.orders || [];
 
       const promises = todayOrders.map(async (order) => {
-        // 1. Check if skip already exists
-        const q = query(
-          collection(db, "attendance"),
-          where("orderId", "==", order.id),
-          where("date", "==", selectedDate)
-        );
-        const snap = await getDocs(q);
+        if (!order.attendanceId) return;
 
-        if (!snap.empty) {
-          console.log(`Skip already exists for order ${order.id}, skipping insert.`);
+        const attRef = doc(db, "attendance", order.attendanceId);
+        const attSnap = await getDoc(attRef);
+
+        if (!attSnap.exists()) return;
+
+        let { days } = attSnap.data();
+        const dayIndex = days.findIndex(d => d.date === selectedDate);
+
+        if (dayIndex === -1) return;
+
+        if (days[dayIndex].status === "leave_company") {
+          console.log(`Company holiday already marked for order ${order.id}`);
           return;
         }
 
-        // 2. Insert company skip
-        await addDoc(collection(db, "attendance"), {
-          orderId: order.id,
-          userId: order.userId,
-          date: selectedDate,
-          status: "leave_company",
-          updatedAt: Timestamp.now(),
-        });
+        // Update status
+        days[dayIndex].status = "leave_company";
 
-        // 3. Extend expiry date +1
-        const orderRef = doc(db, "orders", order.id);
+        await updateDoc(attRef, { days, updatedAt: Timestamp.now() });
+
+        // Extend expiry date
         if (order.expiryDate) {
+          const orderRef = doc(db, "orders", order.id);
           const newExpiry = new Date(order.expiryDate);
           newExpiry.setDate(newExpiry.getDate() + 1);
-          await updateDoc(orderRef, { expiryDate: Timestamp.fromDate(newExpiry) });
+
+          await updateDoc(orderRef, {
+            expiryDate: Timestamp.fromDate(newExpiry),
+          });
         }
       });
 
       await Promise.all(promises);
+
       fetchAttendanceData();
       alert("Marked global leave for today. All expiry dates extended.");
     } catch (error) {
