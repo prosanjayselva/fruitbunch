@@ -301,34 +301,6 @@ const Checkout = () => {
 
       const { orderId, keyId, amount } = data;
 
-      // Store initial order (status "Initiated")
-      await addDoc(collection(db, "orders"), {
-        userId: user?.uid,
-        items: cartItems,
-        amount: cartTotal,
-        currency: "INR",
-        status: "Pending",
-        paymentMethod,
-        razorpayOrderId: orderId,
-        paymentStatus: "Pending",
-        deliveryStatus: "N/A",
-        preferredTime: deliveryTime,
-        expiryDate: getExpiryDate(),
-        createdAt: serverTimestamp(),
-        shipping: {
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          phone: formData.phone,
-          address: formData.address,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
-          country: formData.country,
-          location: location,
-        },
-      });
-
       let paymentDescription = "";
       if (cartItems.length === 1) {
         paymentDescription = `Payment for ${cartItems[0].name}`;
@@ -343,6 +315,7 @@ const Checkout = () => {
         name: "Fruit Bunch",
         description: paymentDescription,
         order_id: orderId,
+
         handler: async function (response) {
           try {
             const verifyRes = await axios.post(verifyPaymentUrl, {
@@ -352,6 +325,33 @@ const Checkout = () => {
             });
 
             if (verifyRes.data.success) {
+              const orderRef = await addDoc(collection(db, "orders"), {
+                userId: user?.uid,
+                items: cartItems,
+                amount: cartTotal,
+                currency: "INR",
+                status: "Confirmed",
+                paymentMethod,
+                razorpayOrderId: orderId,
+                paymentStatus: "Paid",
+                deliveryStatus: "N/A",
+                preferredTime: deliveryTime,
+                expiryDate: getExpiryDate(),
+                createdAt: serverTimestamp(),
+                shipping: {
+                  firstName: formData.firstName,
+                  lastName: formData.lastName,
+                  email: formData.email,
+                  phone: formData.phone,
+                  address: formData.address,
+                  city: formData.city,
+                  state: formData.state,
+                  pincode: formData.pincode,
+                  country: formData.country,
+                  location: location,
+                },
+              });
+
               await addDoc(collection(db, "payments"), {
                 userId: user?.uid,
                 orderId,
@@ -360,44 +360,28 @@ const Checkout = () => {
                 createdAt: serverTimestamp(),
               });
 
-              const q = query(
-                collection(db, "orders"),
-                where("razorpayOrderId", "==", orderId)
+              await initializeAttendance(
+                orderRef.id,
+                user?.uid,
+                new Date(),
+                getExpiryDate()
               );
-              const snap = await getDocs(q);
 
-              if (!snap.empty) {
-                const matchedOrder = snap.docs[0];
-
-                await updateDoc(matchedOrder.ref, {
-                  paymentStatus: "Paid",
-                  status: "Confirmed"
-                });
-
-                await initializeAttendance(
-                  matchedOrder.id,
-                  user?.uid,
-                  matchedOrder.data().createdAt || new Date(),
-                  matchedOrder.data().expiryDate
-                );
-
-                clearCart();
-                navigate("/orderconfirmation", {
-                  state: { orderId, payment: paymentMethod },
-                });
-              } else {
-                console.warn("No matching order found for verification!");
-              }
+              clearCart();
+              navigate("/orderconfirmation", {
+                state: { orderId, payment: paymentMethod },
+              });
             } else {
               alert("Payment verification failed!");
             }
           } catch (err) {
             console.error("Verify error:", err);
-            alert("Verification failed.");
+            alert("Payment verification failed.");
           } finally {
             setProcessingPayment(false);
           }
         },
+
         prefill: {
           name: `${formData.firstName} ${formData.lastName}`,
           email: formData.email,
@@ -406,7 +390,16 @@ const Checkout = () => {
         theme: { color: "#22c55e" },
       };
 
+      // ✅ Launch Razorpay checkout
       const rzp = new window.Razorpay(options);
+
+      // Optional: handle manual close (user cancels)
+      rzp.on("payment.failed", function (response) {
+        console.warn("Payment failed:", response.error);
+        alert("Payment was cancelled or failed. Order not placed.");
+        setProcessingPayment(false);
+      });
+
       rzp.open();
     } catch (err) {
       console.error("Order error:", err);

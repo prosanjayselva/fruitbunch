@@ -38,7 +38,18 @@ const Signup = () => {
       setIsLoading(true);
       setError("");
 
-      // 1. Create user in Firebase Auth
+      let cleanedPhone = formData.phone.replace(/\D/g, ""); // remove non-digits
+      if (cleanedPhone.startsWith("91") && cleanedPhone.length > 10) {
+        cleanedPhone = cleanedPhone.slice(-10); // remove country code
+      }
+
+      // Basic validation
+      if (cleanedPhone.length !== 10) {
+        setError("Please enter a valid 10-digit phone number.");
+        setIsLoading(false);
+        return;
+      }
+
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         formData.email,
@@ -47,28 +58,24 @@ const Signup = () => {
 
       const user = userCredential.user;
 
-      // 2. Update profile with displayName
       await updateProfile(user, {
         displayName: formData.name,
       });
 
-      // 3. Save user in Firestore
       await setDoc(doc(db, "users", user.uid), {
         uid: user.uid,
         name: formData.name,
         email: formData.email,
-        phone: formData.phone,
+        phone: cleanedPhone,
         createdAt: serverTimestamp(),
       });
-      await setDoc(doc(db, "phoneToUid", formData.phone), { uid: user.uid });
+
+      await setDoc(doc(db, "phoneToUid", cleanedPhone), { uid: user.uid });
 
       console.log("User created & saved:", user.uid);
 
       setIsLoading(false);
-
-      // Redirect to login
       navigate("/login");
-
     } catch (err) {
       console.error("Signup error:", err.message);
       setError(err.message);
@@ -235,7 +242,7 @@ const Signup = () => {
               required
             />
             <label htmlFor="terms" className="ml-2 block text-sm text-gray-900">
-              I agree to the <a href="/fruitbunch/termsandconditions" className="text-green-600 hover:text-green-500 transition-colors duration-300">Terms and Conditions</a>
+              I agree to the <Link to="/termsandconditions" className="text-green-600 hover:text-green-500 transition-colors duration-300">Terms and Conditions</Link>
             </label>
           </div>
 

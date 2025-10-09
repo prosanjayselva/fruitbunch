@@ -173,80 +173,127 @@ const AttendancePage = () => {
         return;
       }
 
+      // Prevent marking past dates
+      const today = new Date();
+      const targetDate = new Date(selectedDate);
+      if (targetDate < new Date(today.setHours(0, 0, 0, 0))) {
+        alert("Cannot update attendance for past dates.");
+        return;
+      }
+
       const attRef = doc(db, "attendance", order.attendanceId);
       const attSnap = await getDoc(attRef);
-
       if (!attSnap.exists()) return;
 
       let { days } = attSnap.data();
       const dayIndex = days.findIndex(d => d.date === selectedDate);
-
       if (dayIndex === -1) {
         alert("No attendance entry found for this date.");
         return;
       }
 
-      if (days[dayIndex].status === "leave_user") {
-        alert("Skip already marked for this order on this date.");
+      const currentStatus = days[dayIndex].status;
+
+      // Prevent multiple updates or conflict with company leave
+      if (currentStatus === "leave_user") {
+        alert("User skip already marked for this date.");
+        return;
+      }
+      if (currentStatus === "leave_company") {
+        alert("This date is a company holiday. Cannot mark user leave.");
         return;
       }
 
-      // Update status
+      // Update the day status
       days[dayIndex].status = "leave_user";
+      days[dayIndex].expiryExtended = true; // track if expiry extended already
 
       await updateDoc(attRef, { days, updatedAt: Timestamp.now() });
 
-      // Extend expiry by +1
+      // Extend expiry only if not already extended
       const orderRef = doc(db, "orders", order.id);
       const orderSnap = await getDoc(orderRef);
-      const currentExpiry = orderSnap.data().expiryDate.toDate();
+      const orderData = orderSnap.data();
 
-      const newExpiry = new Date(currentExpiry);
-      newExpiry.setDate(newExpiry.getDate() + 1);
+      const expiryDate = orderData.expiryDate.toDate();
+      const alreadyExtended = orderData?.extendedDates?.includes(selectedDate);
 
-      await updateDoc(orderRef, { expiryDate: Timestamp.fromDate(newExpiry) });
+      if (!alreadyExtended) {
+        const newExpiry = new Date(expiryDate);
+        newExpiry.setDate(newExpiry.getDate() + 1);
+
+        const updatedExtendedDates = orderData.extendedDates || [];
+        updatedExtendedDates.push(selectedDate);
+
+        await updateDoc(orderRef, {
+          expiryDate: Timestamp.fromDate(newExpiry),
+          extendedDates: updatedExtendedDates,
+        });
+      }
 
       fetchAttendanceData();
+      alert("User skip marked successfully.");
     } catch (error) {
       console.error("Error marking user skip:", error);
+      alert("Failed to mark skip. Please try again.");
     }
   };
 
   const handleGlobalLeave = async () => {
     try {
-      const todayOrders = attendanceData.orders || [];
+      const today = new Date();
+      const targetDate = new Date(selectedDate);
+      if (targetDate < new Date(today.setHours(0, 0, 0, 0))) {
+        alert("Cannot mark global leave for past dates.");
+        return;
+      }
 
+      const todayOrders = attendanceData.orders || [];
       const promises = todayOrders.map(async (order) => {
         if (!order.attendanceId) return;
 
         const attRef = doc(db, "attendance", order.attendanceId);
         const attSnap = await getDoc(attRef);
-
         if (!attSnap.exists()) return;
 
         let { days } = attSnap.data();
         const dayIndex = days.findIndex(d => d.date === selectedDate);
-
         if (dayIndex === -1) return;
 
-        if (days[dayIndex].status === "leave_company") {
-          console.log(`Company holiday already marked for order ${order.id}`);
+        const currentStatus = days[dayIndex].status;
+
+        // Avoid duplicate or conflicting updates
+        if (currentStatus === "leave_company") {
+          console.log(`Already marked company holiday for order ${order.id}`);
+          return;
+        }
+        if (currentStatus === "leave_user") {
+          console.log(`User already marked skip for order ${order.id}`);
           return;
         }
 
         // Update status
         days[dayIndex].status = "leave_company";
+        days[dayIndex].expiryExtended = true;
 
         await updateDoc(attRef, { days, updatedAt: Timestamp.now() });
 
-        // Extend expiry date
-        if (order.expiryDate) {
-          const orderRef = doc(db, "orders", order.id);
-          const newExpiry = new Date(order.expiryDate);
-          newExpiry.setDate(newExpiry.getDate() + 1);
+        // Extend expiry date only once
+        const orderRef = doc(db, "orders", order.id);
+        const orderSnap = await getDoc(orderRef);
+        const orderData = orderSnap.data();
+
+        const alreadyExtended = orderData?.extendedDates?.includes(selectedDate);
+        if (!alreadyExtended && orderData.expiryDate) {
+          const expiryDate = new Date(orderData.expiryDate.toDate());
+          expiryDate.setDate(expiryDate.getDate() + 1);
+
+          const updatedExtendedDates = orderData.extendedDates || [];
+          updatedExtendedDates.push(selectedDate);
 
           await updateDoc(orderRef, {
-            expiryDate: Timestamp.fromDate(newExpiry),
+            expiryDate: Timestamp.fromDate(expiryDate),
+            extendedDates: updatedExtendedDates,
           });
         }
       });
@@ -254,9 +301,10 @@ const AttendancePage = () => {
       await Promise.all(promises);
 
       fetchAttendanceData();
-      alert("Marked global leave for today. All expiry dates extended.");
+      alert("Global leave marked for today. Expiry dates updated once per order.");
     } catch (error) {
       console.error("Error marking global leave:", error);
+      alert("Failed to mark global leave. Please try again.");
     }
   };
 
@@ -376,10 +424,11 @@ const AttendancePage = () => {
                     <td className="px-4 lg:px-6 py-4">{getStatusBadge(order.deliveryStatus)}</td>
                     <td className="px-4 lg:px-6 py-4">
                       <select
-                        value={order.deliveryStatus}
+                        value={order.deliveryStatus || ""}
                         onChange={(e) => updateDeliveryStatus(order, e.target.value)}
                         className="text-sm border border-emerald-200 rounded-lg px-2 py-1"
                       >
+                        <option value="">Select status</option>
                         <option value="delivered">Delivered</option>
                         <option value="not_delivered">Customer not available</option>
                         <option value="leave_user">Skip by Customer</option>

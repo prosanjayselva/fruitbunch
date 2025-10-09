@@ -33,52 +33,49 @@ const Login = () => {
 
       let emailToLogin = formData.identifier;
 
-      // Check if identifier is phone (not containing "@")
+      // 🔹 Determine if identifier is phone or email
       if (!formData.identifier.includes("@")) {
-        // Lookup phone → uid mapping
         const phoneDocRef = doc(db, "phoneToUid", formData.identifier);
         const phoneDoc = await getDoc(phoneDocRef);
 
         if (!phoneDoc.exists()) {
-          throw new Error("No account found with this phone number");
+          throw new Error("auth/phone-not-registered");
         }
 
         const { uid } = phoneDoc.data();
 
-        // Now fetch user profile to get email
+        // Get email linked to this UID
         const userDocRef = doc(db, "users", uid);
         const userDoc = await getDoc(userDocRef);
 
         if (!userDoc.exists()) {
-          throw new Error("User profile not found");
+          throw new Error("auth/user-profile-missing");
         }
 
         emailToLogin = userDoc.data().email;
       }
 
-      // 1. Sign in with Firebase Auth
+      // 🔹 Try Firebase Auth Sign-In
       const userCredential = await signInWithEmailAndPassword(
         auth,
         emailToLogin,
         formData.password
       );
-
       const user = userCredential.user;
 
-      // 2. Fetch user data from Firestore
+      // 🔹 Fetch User Profile
       const userDocRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userDocRef);
       const adminRef = doc(db, "admins", user.uid);
       const adminSnap = await getDoc(adminRef);
 
       const isAdminUser = adminSnap.exists();
+
       if (userDoc.exists()) {
         const userData = userDoc.data();
-        // Set user state in localStorage
-        setIsLoading(false);
-        // Set isAdmin in localStorage
+
+        // Store info locally
         localStorage.setItem("isAdmin", JSON.stringify(isAdminUser));
-        // Store in localStorage
         localStorage.setItem(
           "user",
           JSON.stringify({
@@ -88,16 +85,49 @@ const Login = () => {
             phone: userData.phone,
           })
         );
-
       } else {
-        console.log("No user profile found in Firestore!");
+        console.warn("No user profile found in Firestore!");
       }
 
       setIsLoading(false);
       navigate(from, { replace: true });
     } catch (err) {
-      console.error("Login error:", err.message);
-      setError(err.message || "Invalid credentials");
+      console.error("Login error:", err);
+
+      // 🔹 Map Firebase Auth error codes → human-readable messages
+      let errorMessage = "Something went wrong. Please try again.";
+
+      if (err.code) {
+        switch (err.code) {
+          case "auth/invalid-email":
+            errorMessage = "The email address is invalid.";
+            break;
+          case "auth/user-not-found":
+          case "auth/phone-not-registered":
+            errorMessage = "No account found with this email or phone number.";
+            break;
+          case "auth/wrong-password":
+            errorMessage = "Incorrect password. Please try again.";
+            break;
+          case "auth/invalid-credential":
+            errorMessage = "Invalid login credentials. Please check and try again.";
+            break;
+          case "auth/too-many-requests":
+            errorMessage =
+              "Too many failed attempts. Please wait a few minutes and try again.";
+            break;
+          case "auth/user-disabled":
+            errorMessage = "This account has been disabled. Contact support.";
+            break;
+          default:
+            errorMessage = "Unable to sign in. Please check your credentials.";
+            break;
+        }
+      } else if (err.message === "auth/user-profile-missing") {
+        errorMessage = "User profile not found. Please contact support.";
+      }
+
+      setError(errorMessage);
       setIsLoading(false);
     }
   };
