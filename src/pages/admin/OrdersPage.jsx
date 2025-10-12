@@ -53,6 +53,16 @@ const OrdersPage = () => {
 
   const handleMarkPaid = async (order) => {
     try {
+      if (!window.confirmation) {
+        window.confirmation = (message) => new Promise((resolve) => {
+          const confirmed = window.confirm(message);
+          resolve(confirmed);
+        });
+      }
+      const confirmed = await window.confirmation("Are you sure you want to mark this order as Paid?");
+      if (!confirmed) return;
+
+      // Update in Firestore
       const orderRef = doc(db, 'orders', order.id);
       await updateDoc(orderRef, { paymentStatus: 'Paid' });
 
@@ -104,7 +114,7 @@ const OrdersPage = () => {
           >
             <option value="All">All Methods</option>
             <option value="card">Credit/Debit Card</option>
-            <option value="cod">Cash on Delivery</option>
+            <option value="COD">Cash on Delivery</option>
             <option value="upi">UPI</option>
           </select>
 

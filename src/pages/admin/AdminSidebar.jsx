@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 
 const AdminSidebar = ({ sidebarOpen, setSidebarOpen }) => {
   const location = useLocation();
@@ -10,6 +10,7 @@ const AdminSidebar = ({ sidebarOpen, setSidebarOpen }) => {
     { id: 'subscriptions', label: 'Subscriptions', icon: 'fa-chart-pie', path: '/admin/subscriptions' },
     { id: 'orders', label: 'Orders', icon: 'fa-box', path: '/admin/orders' },
     { id: 'attendance', label: 'Attendance', icon: 'fa-users', path: '/admin/attendance' },
+    { id: 'corporatequotes', label: 'Function Quotes', icon: 'fa-briefcase', path: '/admin/corporatequotes' }
   ];
 
   const getActiveTab = () => {
@@ -26,13 +27,22 @@ const AdminSidebar = ({ sidebarOpen, setSidebarOpen }) => {
     <div className={`fixed lg:static inset-y-0 left-0 z-40 w-64 h-[100vh] bg-white shadow-xl transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 transition-transform duration-300 ease-in-out`}>
       <div className="flex flex-col h-full">
         {/* Sidebar Header */}
-        <div className="py-6 p-2 bg-gradient-to-r from-emerald-600 to-green-600 text-white">
-          <h1 className="text-xl font-bold">
-            Fruit Bunch Admin
-          </h1>
-          <p className="text-emerald-100 text-sm mt-1">
-            Sustainable Delivery Management
-          </p>
+        <div className="py-6 px-4 bg-gradient-to-r from-emerald-600 to-green-600 text-white flex items-center justify-between">
+          {/* Left Section: Title */}
+          {/* Right Section: Back Button */}
+          <Link
+            to="/"
+            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 mr-2 rounded-lg text-sm font-medium transition"
+          >
+            <i className="fas fa-arrow-left text-sm"></i>
+          </Link>
+          <div>
+            <h1 className="text-lg font-bold">Fruit Bunch Admin</h1>
+            <p className="text-emerald-100 text-sm mt-1">
+              Sustainable Delivery Management
+            </p>
+          </div>
+
         </div>
 
         {/* Navigation */}
@@ -41,11 +51,10 @@ const AdminSidebar = ({ sidebarOpen, setSidebarOpen }) => {
             <button
               key={tab.id}
               onClick={() => handleTabClick(tab.path)}
-              className={`w-full flex items-center px-4 py-3 rounded-xl text-left transition-all duration-200 ${
-                getActiveTab() === tab.id
+              className={`w-full flex items-center px-4 py-3 rounded-xl text-left transition-all duration-200 ${getActiveTab() === tab.id
                   ? 'bg-emerald-50 text-emerald-700 border-l-4 border-emerald-600 shadow-sm'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+                }`}
             >
               <i className={`fas ${tab.icon} text-lg mr-3`}></i>
               <span className="font-medium">{tab.label}</span>

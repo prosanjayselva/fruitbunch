@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import BasePlanimage from '../assets/images/BasicPlanImage.jpeg';
-import Premiumimage from '../assets/images/PeriumPlanImage.jpeg';
+import Premiumimage from '../assets/images/premiumplan.jpg';
 import diabeticplan from '../assets/images/fruit-7.jpg';
 import balanceddiet from '../assets/images/BalancedDiet.png';
-import saladplan from '../assets/images/juice2.jpg';
+import saladplan from '../assets/images/saladbowl.jpg';
 import kidsplan from '../assets/images/kidsplan.jpg';
 import freshjuice from '../assets/images/freshjuice.jpg';
 import buttermilk from '../assets/images/butter.jpg';
@@ -163,7 +163,7 @@ const Subscription = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
         {subscriptionPlans.map(plan => (
           <div key={plan.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition" data-aos="fade-up">
-            <img src={plan.image} alt={plan.name} className="w-full h-48 object-cover" />
+            <img src={plan.image} alt={plan.name} className="w-full h-64 object-cover" />
             <div className="p-6">
               <h3 className="text-xl font-bold text-green-800 mb-2">{plan.name}</h3>
               <p className="text-2xl font-bold text-green-600 mb-4">₹{plan.price}/- per month</p>
@@ -205,7 +205,7 @@ const Subscription = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {drinks.map(drink => (
             <div key={drink.id} className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition" data-aos="fade-up">
-              <img src={drink.image} alt={drink.name} className="w-full h-48 object-cover" />
+              <img src={drink.image} alt={drink.name} className="w-full h-64 object-cover" />
               <div className="p-6">
                 <h3 className="text-xl font-bold text-green-800 mb-2">{drink.name}</h3>
                 <p className="text-lg lg:text-2xl font-bold text-green-600 mb-4">

@@ -2,11 +2,9 @@ import React, { useState, useEffect } from 'react';
 import bulk1 from "../assets/images/bulk1.jpeg";
 import bulk2 from "../assets/images/bulk2.jpeg";
 import bulk3 from "../assets/images/bulk3.jpeg";
-import primeplan from "../assets/images/primeplan.jpg";
-import homeplan from "../assets/images/homeplan.jpg";
-import BasePlanimage from '../assets/images/basicplan.jpg';
-import Premiumimage from '../assets/images/primeplan.jpg';
-import diabeticplan from '../assets/images/fruit-7.jpg';
+import BasePlanimage from '../assets/images/classic.jpg';
+import Premiumimage from '../assets/images/grand.jpg';
+import diabeticplan from '../assets/images/royal.jpg';
 import { db } from '../../firebaseConfig';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
@@ -95,7 +93,7 @@ const Corporate = () => {
           ...formData,
           createdAt: Timestamp.now()
         });
-        alert("Thank you! Your request has been submitted.");
+        alert("Thank you! Your request has been submitted. Our team will contact you soon.");
         setFormData({ name: "", email: "", phone: "", message: "" });
       } catch (err) {
         console.error(err);
@@ -431,7 +429,7 @@ const Corporate = () => {
                 <input
                   type="email"
                   name="email"
-                  placeholder="Work Email"
+                  placeholder="Email"
                   value={formData.email}
                   onChange={handleChange}
                   className={`w-full px-5 py-4 border ${formErrors.email ? 'border-red-500' : 'border-gray-300'} rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 transition`}
@@ -457,7 +455,7 @@ const Corporate = () => {
             <div>
               <textarea
                 name="message"
-                placeholder="Tell us about your company size and fruit preferences..."
+                placeholder="Tell us about your function size and fruit preferences..."
                 rows="5"
                 value={formData.message}
                 onChange={handleChange}

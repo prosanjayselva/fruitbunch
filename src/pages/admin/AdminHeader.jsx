@@ -20,6 +20,7 @@ const AdminHeader = () => {
     if (path === '/admin/orders') return 'Orders';
     if (path === '/admin/attendance') return 'Attendance';
     if (path === '/admin/subscriptions') return 'Subscriptions';
+    if (path === '/admin/corporatequotes') return 'Function Quotes';
     return 'Dashboard';
   };
 
@@ -29,6 +30,7 @@ const AdminHeader = () => {
     if (path === '/admin/orders') return 'Track and manage all delivery orders';
     if (path === '/admin/attendance') return 'Daily delivery performance tracking';
     if (path === '/admin/subscriptions') return 'Active subscriptions and customer management';
+    if (path === '/admin/corporatequotes') return 'Manage function quotes and requests';
     return 'Manage your delivery operations efficiently';
   };
 

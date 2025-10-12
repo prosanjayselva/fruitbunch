@@ -121,6 +121,13 @@ const AttendancePage = () => {
   // 🔹 Update single order status
   const updateDeliveryStatus = async (order, status) => {
     try {
+      const confirmMsg =
+        status === "not_delivered"
+          ? "Are you sure you want to mark this order as 'Not Delivered'? It will still be recorded as 'Delivered'."
+          : `Are you sure you want to mark this order as '${status.replace("_", " ")}'?`;
+
+      const confirmed = window.confirm(confirmMsg);
+      if (!confirmed) return;
       let finalStatus = status;
 
       // If customer not available → still mark as delivered
