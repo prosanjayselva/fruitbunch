@@ -42,8 +42,8 @@ const Profile = () => {
 
         for (const order of orders) {
           const startDate = order.createdAt?.toDate?.() || new Date();
-          const expiryDate = new Date(startDate);
-          expiryDate.setDate(startDate.getDate() + 26);
+          const expiryDate = order.expiryDate?.toDate?.() || new Date();
+          // expiryDate.setDate(startDate.getDate() + 26);
 
           if (new Date() <= expiryDate) {
             const daysLeft = Math.ceil((expiryDate - new Date()) / (1000 * 60 * 60 * 24));
@@ -126,8 +126,8 @@ const Profile = () => {
     const statusConfig = {
       delivered: { color: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Delivered' },
       pending: { color: 'bg-amber-100 text-amber-800 border-amber-200', label: 'N/A' },
-      not_delivered: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Not Delivered' },
-      leave_user: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Skip by Customer' },
+      not_delivered: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Customer not available' },
+      leave_user: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Skipped by Customer' },
       leave_company: { color: 'bg-indigo-100 text-indigo-800 border-indigo-200', label: 'Company Holiday' },
     };
     const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800 border-gray-200', label: status };
@@ -286,8 +286,8 @@ const Profile = () => {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 8v4l3 3" />
                               </svg>
                             </div>
-                            <h4 className="font-semibold text-gray-900">Days Left</h4>
-                            <p className="text-gray-600 text-sm">{subscription.daysLeft} days</p>
+                            <h4 className="font-semibold text-gray-900">Validity</h4>
+                            <p className="text-gray-600 text-sm">26 days</p>
                           </div>
                         </div>
 

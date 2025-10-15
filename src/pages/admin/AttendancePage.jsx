@@ -76,11 +76,12 @@ const AttendancePage = () => {
         .filter(order => {
           if (!order.expiryDate) return false;
 
-          // Exclude orders placed today
-          const orderDate = order.createdAt.toISOString().split("T")[0];
-          if (orderDate === selectedDate) return false;
+          const orderDate = new Date(order.createdAt);
+          const expiryDate = new Date(order.expiryDate);
 
-          return new Date(selectedDate) <= order.expiryDate;
+          // Include only if selectedDate is within the active period
+          const selected = new Date(selectedDate);
+          return selected >= orderDate && selected <= expiryDate;
         })
         .map(order => {
           const att = attendanceRecords.find(a => a.orderId === order.id);
@@ -180,9 +181,10 @@ const AttendancePage = () => {
         return;
       }
 
-      // Prevent marking past dates
       const today = new Date();
       const targetDate = new Date(selectedDate);
+
+      // Prevent editing past dates
       if (targetDate < new Date(today.setHours(0, 0, 0, 0))) {
         alert("Cannot update attendance for past dates.");
         return;
@@ -194,48 +196,48 @@ const AttendancePage = () => {
 
       let { days } = attSnap.data();
       const dayIndex = days.findIndex(d => d.date === selectedDate);
+
+      // 1️⃣ Mark today's skip
       if (dayIndex === -1) {
-        alert("No attendance entry found for this date.");
-        return;
+        days.push({ date: selectedDate, status: "leave_user" });
+      } else {
+        const currentStatus = days[dayIndex].status;
+        if (["leave_user", "leave_company"].includes(currentStatus)) {
+          alert("Already marked as leave for this date.");
+          return;
+        }
+        days[dayIndex].status = "leave_user";
       }
-
-      const currentStatus = days[dayIndex].status;
-
-      // Prevent multiple updates or conflict with company leave
-      if (currentStatus === "leave_user") {
-        alert("User skip already marked for this date.");
-        return;
-      }
-      if (currentStatus === "leave_company") {
-        alert("This date is a company holiday. Cannot mark user leave.");
-        return;
-      }
-
-      // Update the day status
-      days[dayIndex].status = "leave_user";
-      days[dayIndex].expiryExtended = true; // track if expiry extended already
 
       await updateDoc(attRef, { days, updatedAt: Timestamp.now() });
 
-      // Extend expiry only if not already extended
+      // 2️⃣ Extend order expiry only once per skipped date
       const orderRef = doc(db, "orders", order.id);
       const orderSnap = await getDoc(orderRef);
       const orderData = orderSnap.data();
 
-      const expiryDate = orderData.expiryDate.toDate();
-      const alreadyExtended = orderData?.extendedDates?.includes(selectedDate);
-
-      if (!alreadyExtended) {
-        const newExpiry = new Date(expiryDate);
+      const extendedDates = orderData.extendedDates || [];
+      if (!extendedDates.includes(selectedDate)) {
+        const newExpiry = new Date(orderData.expiryDate.toDate());
         newExpiry.setDate(newExpiry.getDate() + 1);
-
-        const updatedExtendedDates = orderData.extendedDates || [];
-        updatedExtendedDates.push(selectedDate);
+        extendedDates.push(selectedDate);
 
         await updateDoc(orderRef, {
           expiryDate: Timestamp.fromDate(newExpiry),
-          extendedDates: updatedExtendedDates,
+          extendedDates,
         });
+
+        // 3️⃣ Add next day (pending) in attendance
+        const lastDate = days[days.length - 1]?.date;
+        const nextDate = new Date(lastDate || selectedDate);
+        nextDate.setDate(nextDate.getDate() + 1);
+        const nextDateString = nextDate.toISOString().split("T")[0];
+
+        // Prevent duplicate push if already exists
+        if (!days.some(d => d.date === nextDateString)) {
+          days.push({ date: nextDateString, status: "pending" });
+          await updateDoc(attRef, { days, updatedAt: Timestamp.now() });
+        }
       }
 
       fetchAttendanceData();
@@ -250,13 +252,20 @@ const AttendancePage = () => {
     try {
       const today = new Date();
       const targetDate = new Date(selectedDate);
+
+      // Prevent marking past dates
       if (targetDate < new Date(today.setHours(0, 0, 0, 0))) {
         alert("Cannot mark global leave for past dates.");
         return;
       }
 
-      const todayOrders = attendanceData.orders || [];
-      const promises = todayOrders.map(async (order) => {
+      const activeOrders = attendanceData.orders || [];
+      if (activeOrders.length === 0) {
+        alert("No active orders found.");
+        return;
+      }
+
+      const promises = activeOrders.map(async (order) => {
         if (!order.attendanceId) return;
 
         const attRef = doc(db, "attendance", order.attendanceId);
@@ -265,53 +274,54 @@ const AttendancePage = () => {
 
         let { days } = attSnap.data();
         const dayIndex = days.findIndex(d => d.date === selectedDate);
-        if (dayIndex === -1) return;
 
-        const currentStatus = days[dayIndex].status;
-
-        // Avoid duplicate or conflicting updates
-        if (currentStatus === "leave_company") {
-          console.log(`Already marked company holiday for order ${order.id}`);
-          return;
+        // 1️⃣ Mark selected date as leave_company
+        if (dayIndex === -1) {
+          days.push({ date: selectedDate, status: "leave_company" });
+        } else {
+          const currentStatus = days[dayIndex].status;
+          if (["leave_company", "leave_user"].includes(currentStatus)) return;
+          days[dayIndex].status = "leave_company";
         }
-        if (currentStatus === "leave_user") {
-          console.log(`User already marked skip for order ${order.id}`);
-          return;
-        }
-
-        // Update status
-        days[dayIndex].status = "leave_company";
-        days[dayIndex].expiryExtended = true;
 
         await updateDoc(attRef, { days, updatedAt: Timestamp.now() });
 
-        // Extend expiry date only once
+        // 2️⃣ Extend expiry only once per date
         const orderRef = doc(db, "orders", order.id);
         const orderSnap = await getDoc(orderRef);
         const orderData = orderSnap.data();
 
-        const alreadyExtended = orderData?.extendedDates?.includes(selectedDate);
-        if (!alreadyExtended && orderData.expiryDate) {
-          const expiryDate = new Date(orderData.expiryDate.toDate());
-          expiryDate.setDate(expiryDate.getDate() + 1);
-
-          const updatedExtendedDates = orderData.extendedDates || [];
-          updatedExtendedDates.push(selectedDate);
+        const extendedDates = orderData.extendedDates || [];
+        if (!extendedDates.includes(selectedDate)) {
+          const newExpiry = new Date(orderData.expiryDate.toDate());
+          newExpiry.setDate(newExpiry.getDate() + 1);
+          extendedDates.push(selectedDate);
 
           await updateDoc(orderRef, {
-            expiryDate: Timestamp.fromDate(expiryDate),
-            extendedDates: updatedExtendedDates,
+            expiryDate: Timestamp.fromDate(newExpiry),
+            extendedDates,
           });
+
+          // 3️⃣ Add next day (pending) in attendance if not already added
+          const lastDate = days[days.length - 1]?.date;
+          const nextDate = new Date(lastDate || selectedDate);
+          nextDate.setDate(nextDate.getDate() + 1);
+          const nextDateString = nextDate.toISOString().split("T")[0];
+
+          if (!days.some(d => d.date === nextDateString)) {
+            days.push({ date: nextDateString, status: "pending" });
+            await updateDoc(attRef, { days, updatedAt: Timestamp.now() });
+          }
         }
       });
 
       await Promise.all(promises);
 
       fetchAttendanceData();
-      alert("Global leave marked for today. Expiry dates updated once per order.");
+      alert("Company holiday marked successfully. Expiry extended by 1 day for all active orders.");
     } catch (error) {
       console.error("Error marking global leave:", error);
-      alert("Failed to mark global leave. Please try again.");
+      alert("Failed to mark company leave. Please try again.");
     }
   };
 
@@ -324,8 +334,8 @@ const AttendancePage = () => {
     const statusConfig = {
       delivered: { color: 'bg-emerald-100 text-emerald-800 border-emerald-200', label: 'Delivered' },
       pending: { color: 'bg-amber-100 text-amber-800 border-amber-200', label: 'N/A' },
-      not_delivered: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Not Delivered' },
-      leave_user: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Skip by Customer' },
+      not_delivered: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Customer not available' },
+      leave_user: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Skipped by Customer' },
       leave_company: { color: 'bg-indigo-100 text-indigo-800 border-indigo-200', label: 'Company Holiday' },
     };
     const config = statusConfig[status] || { color: 'bg-gray-100 text-gray-800 border-gray-200', label: status };
@@ -438,7 +448,7 @@ const AttendancePage = () => {
                         <option value="">Select status</option>
                         <option value="delivered">Delivered</option>
                         <option value="not_delivered">Customer not available</option>
-                        <option value="leave_user">Skip by Customer</option>
+                        <option value="leave_user">Skipped by Customer</option>
                       </select>
                     </td>
                   </tr>
