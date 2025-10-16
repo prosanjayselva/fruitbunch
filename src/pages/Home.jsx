@@ -9,10 +9,8 @@ import homeplan from "../assets/images/Balanceddietplan.jpg";
 const Home = () => {
   const [currentImage, setCurrentImage] = useState(0);
 
-  // Hero images
   const heroImages = [home2, home1, backbowl1];
 
-  // Hero image rotation
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentImage((prev) => (prev + 1) % heroImages.length);
@@ -20,7 +18,6 @@ const Home = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Initialize AOS
   useEffect(() => {
     if (window.AOS) {
       window.AOS.init({
