@@ -114,9 +114,29 @@ const AttendancePage = () => {
   // 🔹 Days left (from expiryDate only)
   const calculateDaysLeft = (expiryDate) => {
     if (!expiryDate) return 0;
+
     const now = new Date();
     const expiry = new Date(expiryDate);
-    return Math.max(0, Math.ceil((expiry - now) / (1000 * 60 * 60 * 24)));
+
+    // If expiry date is in the past, return 0
+    if (expiry < now) return 0;
+
+    let count = 0;
+    let currentDate = new Date(now);
+
+    // Set both dates to start of day for accurate comparison
+    currentDate.setHours(0, 0, 0, 0);
+    expiry.setHours(0, 0, 0, 0);
+
+    while (currentDate < expiry) {
+      // Skip Sunday (0 = Sunday)
+      if (currentDate.getDay() !== 0) {
+        count++;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return count;
   };
 
   // 🔹 Update single order status
@@ -227,10 +247,16 @@ const AttendancePage = () => {
           extendedDates,
         });
 
-        // 3️⃣ Add next day (pending) in attendance
+        // 3️⃣ Add next day (pending) in attendance - Skip Sundays
         const lastDate = days[days.length - 1]?.date;
         const nextDate = new Date(lastDate || selectedDate);
         nextDate.setDate(nextDate.getDate() + 1);
+
+        // Skip Sunday (0 = Sunday)
+        if (nextDate.getDay() === 0) {
+          nextDate.setDate(nextDate.getDate() + 1); // Skip to Monday
+        }
+
         const nextDateString = nextDate.toISOString().split("T")[0];
 
         // Prevent duplicate push if already exists
@@ -302,10 +328,16 @@ const AttendancePage = () => {
             extendedDates,
           });
 
-          // 3️⃣ Add next day (pending) in attendance if not already added
+          // 3️⃣ Add next day (pending) in attendance - Skip Sundays
           const lastDate = days[days.length - 1]?.date;
           const nextDate = new Date(lastDate || selectedDate);
           nextDate.setDate(nextDate.getDate() + 1);
+
+          // Skip Sunday (0 = Sunday)
+          if (nextDate.getDay() === 0) {
+            nextDate.setDate(nextDate.getDate() + 1); // Skip to Monday
+          }
+
           const nextDateString = nextDate.toISOString().split("T")[0];
 
           if (!days.some(d => d.date === nextDateString)) {

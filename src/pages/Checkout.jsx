@@ -31,8 +31,11 @@ const initializeAttendance = async (orderId, userId, startDate, expiryDate) => {
   end = new Date(end);
 
   while (current <= end) {
-    const dateStr = current.toISOString().split("T")[0];
-    days.push({ date: dateStr, status: "pending" });
+    // Skip Sunday (0 = Sunday)
+    if (current.getDay() !== 0) {
+      const dateStr = current.toISOString().split("T")[0];
+      days.push({ date: dateStr, status: "pending" });
+    }
     current.setDate(current.getDate() + 1);
   }
 
@@ -214,8 +217,18 @@ const Checkout = () => {
 
   const getExpiryDate = () => {
     const now = new Date();
-    now.setDate(now.getDate() + 26);
-    return now;
+    let count = 0;
+    let currentDate = new Date(now);
+
+    while (count < 26) {
+      currentDate.setDate(currentDate.getDate() + 1);
+      // Skip Sunday (0 = Sunday)
+      if (currentDate.getDay() !== 0) {
+        count++;
+      }
+    }
+
+    return currentDate;
   };
 
   // ----- Handle checkout -----

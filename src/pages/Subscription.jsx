@@ -38,7 +38,7 @@ const Subscription = () => {
     {
       id: 1,
       name: "Basic plan",
-      price: 2499,
+      price: 1,
       image: BasePlanimage,
       description: "Apple, Orange, Papaya, Pineapple",
       moreInfo: "Grapes, Guava, Water melon, Fig, Pears, chikku",

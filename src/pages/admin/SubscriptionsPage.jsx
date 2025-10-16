@@ -62,9 +62,29 @@ const SubscriptionsPage = () => {
 
   const calculateDaysLeft = (expiryDate) => {
     if (!expiryDate) return 0;
+
     const now = new Date();
     const expiry = new Date(expiryDate);
-    return Math.max(0, Math.ceil((expiry - now) / (1000 * 60 * 60 * 24)));
+
+    // If expiry date is in the past, return 0
+    if (expiry < now) return 0;
+
+    let count = 0;
+    let currentDate = new Date(now);
+
+    // Set both dates to start of day for accurate comparison
+    currentDate.setHours(0, 0, 0, 0);
+    expiry.setHours(0, 0, 0, 0);
+
+    while (currentDate < expiry) {
+      // Skip Sunday (0 = Sunday)
+      if (currentDate.getDay() !== 0) {
+        count++;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return count;
   };
 
   const calculateSubscriptionStatus = (startDate) => {

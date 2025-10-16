@@ -10,7 +10,8 @@ const AdminSidebar = ({ sidebarOpen, setSidebarOpen }) => {
     { id: 'subscriptions', label: 'Subscriptions', icon: 'fa-chart-pie', path: '/admin/subscriptions' },
     { id: 'orders', label: 'Orders', icon: 'fa-box', path: '/admin/orders' },
     { id: 'attendance', label: 'Attendance', icon: 'fa-users', path: '/admin/attendance' },
-    { id: 'corporatequotes', label: 'Function Quotes', icon: 'fa-briefcase', path: '/admin/corporatequotes' }
+    { id: 'corporatequotes', label: 'Function Quotes', icon: 'fa-briefcase', path: '/admin/corporatequotes' },
+    { id: 'deliveryhistory', label: 'Delivery History', icon: 'fa-truck', path: '/admin/deliveryhistory' }
   ];
 
   const getActiveTab = () => {

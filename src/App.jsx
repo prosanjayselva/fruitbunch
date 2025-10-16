@@ -27,6 +27,7 @@ import OrdersPage from "./pages/admin/OrdersPage";
 import AttendancePage from "./pages/admin/AttendancePage";
 import AnalyticsPage from "./pages/admin/AnalyticsPage";
 import CorporateQuotesPage from "./pages/admin/CorporateQuotesPage";
+import DeliveryHistoryPage from "./pages/admin/DeliveryHistory";
 
 // Layout with Navbar + Footer
 function MainLayout() {
@@ -91,6 +92,7 @@ function App() {
             <Route path="orders" element={<OrdersPage />} />
             <Route path="attendance" element={<AttendancePage />} />
             <Route path="corporatequotes" element={<CorporateQuotesPage />} />
+            <Route path="deliveryhistory" element={<DeliveryHistoryPage />} />
           </Route>
 
           {/* Redirect unknown to home */}
