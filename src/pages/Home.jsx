@@ -69,9 +69,9 @@ const Home = () => {
                   key={index}
                   src={img}
                   alt="Fresh fruits"
-                  className={`absolute top-0 left-0 w-full h-full object-cover transition-opacity duration-1000 ease-in-out ${
-                    currentImage === index ? "opacity-100" : "opacity-0"
-                  }`}
+                  className={`absolute top-0 left-0 w-full h-full transition-opacity duration-1000 ease-in-out 
+        ${currentImage === index ? "opacity-100" : "opacity-0"} 
+        object-contain md:object-cover`}
                 />
               ))}
 
@@ -80,6 +80,7 @@ const Home = () => {
                 <span className="text-green-600 font-bold">🍎 Fresh!</span>
               </div>
             </div>
+
           </div>
         </div>
       </section>
