@@ -351,7 +351,7 @@ const DeliveryHistoryPage = () => {
                                             </div>
                                             <div className="text-center">
                                                 <div className="text-2xl font-bold text-green-600">
-                                                    {attendanceData.days.filter(day => day.status === 'completed').length}
+                                                    {attendanceData.days.filter(day => day.status === 'delivered').length}
                                                 </div>
                                                 <div className="text-gray-600">Completed</div>
                                             </div>
@@ -363,7 +363,7 @@ const DeliveryHistoryPage = () => {
                                             </div>
                                             <div className="text-center">
                                                 <div className="text-2xl font-bold text-red-600">
-                                                    {attendanceData.days.filter(day => day.status === 'missed').length}
+                                                    {attendanceData.days.filter(day => day.date < new Date().toISOString().split("T")[0] && ["pending"].includes(day.status)).length}
                                                 </div>
                                                 <div className="text-gray-600">Missed</div>
                                             </div>
