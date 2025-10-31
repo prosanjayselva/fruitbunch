@@ -84,6 +84,30 @@ const Checkout = () => {
   const [mapZoom, setMapZoom] = useState(13);
   const [mapType, setMapType] = useState('satellite'); // 'satellite' or 'street'
   const [deliveryTime, setDeliveryTime] = useState("7:30 AM");
+  const [finalTotal, setFinalTotal] = useState(cartTotal);
+
+  useEffect(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth(); // 0 = Jan, 10 = Nov
+    const currentDate = now.getDate();   // 1–31
+    const currentYear = now.getFullYear();
+
+    // Check if it's November and between 1st–15th
+    const isNovemberOfferPeriod = currentYear === 2025 && currentMonth === 10 && currentDate <= 15;
+
+    if (isNovemberOfferPeriod) {
+      if (paymentMethod === "card" || paymentMethod === "upi") {
+        setFinalTotal((cartTotal * 0.9).toFixed(2)); // 10% off
+      } else if (paymentMethod === "cod") {
+        setFinalTotal((cartTotal * 0.95).toFixed(2)); // 5% off
+      } else {
+        setFinalTotal(cartTotal.toFixed(2));
+      }
+    } else {
+      // Outside offer period → no discount
+      setFinalTotal(cartTotal.toFixed(2));
+    }
+  }, [paymentMethod, cartTotal]);
 
   // Custom marker icon
   const markerIcon = new L.Icon({
@@ -266,7 +290,7 @@ const Checkout = () => {
         const orderRef = await addDoc(collection(db, "orders"), {
           userId: user?.uid,
           items: cartItems,
-          amount: cartTotal,
+          amount: finalTotal,
           currency: "INR",
           status: "Pending (COD)",
           paymentMethod: "COD",
@@ -308,7 +332,7 @@ const Checkout = () => {
 
       // Online Payment (Card / UPI → Razorpay)
       const { data } = await axios.post(createOrderUrl, {
-        amount: cartTotal,
+        amount: finalTotal,
         currency: "INR",
       });
 
@@ -341,7 +365,7 @@ const Checkout = () => {
               const orderRef = await addDoc(collection(db, "orders"), {
                 userId: user?.uid,
                 items: cartItems,
-                amount: cartTotal,
+                amount: finalTotal,
                 currency: "INR",
                 status: "Confirmed",
                 paymentMethod,
@@ -506,7 +530,22 @@ const Checkout = () => {
               </div>
               <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t border-gray-200">
                 <span>Total</span>
-                <span>₹{cartTotal}</span>
+                <span>
+                  ₹{finalTotal}
+                  {(() => {
+                    const now = new Date();
+                    const isNovemberOfferPeriod = now.getFullYear() === 2025 && now.getMonth() === 10 && now.getDate() <= 15;
+
+                    if (isNovemberOfferPeriod) {
+                      return (
+                        <span className="text-xs text-green-600 ml-2">
+                          ({paymentMethod === "cod" ? "5%" : "10%"} discount)
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
+                </span>
               </div>
             </div>
           </div>
@@ -774,7 +813,7 @@ const Checkout = () => {
                 type="submit"
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition"
               >
-                Pay ₹{cartTotal}
+                Pay ₹{finalTotal}
               </button>
             </div>
           </form>

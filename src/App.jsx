@@ -28,11 +28,13 @@ import AttendancePage from "./pages/admin/AttendancePage";
 import AnalyticsPage from "./pages/admin/AnalyticsPage";
 import CorporateQuotesPage from "./pages/admin/CorporateQuotesPage";
 import DeliveryHistoryPage from "./pages/admin/DeliveryHistory";
+import OfferBanner from "./components/OfferBanner";
 
 // Layout with Navbar + Footer
 function MainLayout() {
   return (
     <div className="min-h-screen flex flex-col">
+      <OfferBanner />
       <ScrollToTop />
       <Navbar />
       <main className="flex-grow">

@@ -56,7 +56,7 @@ const Navbar = () => {
       </div>
 
       {/* Main navigation */}
-      <nav className="bg-white shadow-md sticky top-0 z-[9999]">
+      <nav className="bg-white shadow-md sticky top-0 z-[9998]">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
           <Link to="/" className="flex items-center">
             <img src={logo} alt="Fruit Bunch" className="h-14" />
