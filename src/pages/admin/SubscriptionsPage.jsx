@@ -48,7 +48,7 @@ const SubscriptionsPage = () => {
           orders: userOrders,
           activeSubscription,
           totalOrders: userOrders.length,
-          totalSpent: userOrders.reduce((sum, order) => sum + (order.amount || 0), 0),
+          totalSpent: userOrders.reduce((sum, order) => sum + (parseFloat(order.amount) || 0), 0).toFixed(2),
         };
       });
 

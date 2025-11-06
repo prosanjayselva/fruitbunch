@@ -39,7 +39,7 @@ const AnalyticsPage = () => {
           user,
           orders: userOrders,
           totalOrders: userOrders.length,
-          totalSpent: userOrders.reduce((sum, order) => sum + (order.amount || 0), 0)
+          totalSpent: userOrders.reduce((sum, order) => sum + (parseFloat(order.amount) || 0), 0).toFixed(2),
         };
       });
 
@@ -70,7 +70,7 @@ const AnalyticsPage = () => {
   const filteredRevenueOrders = filterByTimeRange(orders, revenueRange);
 
   // --- Metrics ---
-  const totalRevenue = filteredRevenueOrders.reduce((sum, order) => sum + (order.amount || 0), 0);
+  const totalRevenue = filteredRevenueOrders.reduce((sum, order) => sum + (parseFloat(order.amount) || 0), 0).toFixed(2);
   const activeSubscriptions = subscriptions.filter(sub => sub.orders.length > 0).length;
   const deliverySuccessRate = filteredOrders.length > 0 
     ? Math.round((filteredOrders.filter(o => o.deliveryStatus === 'delivered').length / filteredOrders.length) * 100)
