@@ -59,17 +59,33 @@ const AttendancePage = () => {
   // 🔹 Fetch attendance logs for the selected date
   const fetchAttendanceData = async () => {
     try {
-      // Get all attendance docs for current orders
-      const attendanceQuery = query(
-        collection(db, "attendance"),
-        where("orderId", "in", orders.map(o => o.id))
-      );
-      const snapshot = await getDocs(attendanceQuery);
+      const orderIds = orders.map(o => o.id);
+      const MAX_IN = 30;
 
-      const attendanceRecords = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      // Prepare batched arrays of up to 30 orderIds per query
+      const batches = [];
+      for (let i = 0; i < orderIds.length; i += MAX_IN) {
+        batches.push(orderIds.slice(i, i + MAX_IN));
+      }
+
+      let attendanceRecords = [];
+
+      // Fetch attendance documents batch-wise
+      for (const batch of batches) {
+        const attendanceQuery = query(
+          collection(db, "attendance"),
+          where("orderId", "in", batch)
+        );
+
+        const snapshot = await getDocs(attendanceQuery);
+
+        snapshot.forEach(doc => {
+          attendanceRecords.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+      }
 
       // Merge with orders
       const merged = orders
@@ -78,16 +94,16 @@ const AttendancePage = () => {
 
           const orderDate = new Date(order.createdAt);
           const expiryDate = new Date(order.expiryDate);
-
-          // Include only if selectedDate is within the active period
           const selected = new Date(selectedDate);
+
           return selected >= orderDate && selected <= expiryDate;
         })
         .map(order => {
           const att = attendanceRecords.find(a => a.orderId === order.id);
 
-          // Look up selectedDate inside days[]
-          const dayStatus = att?.days?.find(d => d.date === selectedDate)?.status || "pending";
+          const dayStatus =
+            att?.days?.find(d => d.date === selectedDate)?.status ||
+            "pending";
 
           return {
             ...order,
