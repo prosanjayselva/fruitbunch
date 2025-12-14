@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import OfferBannerimage from '../assets/images/Offerbanner.jpg';
+import Trialoffer from '../assets/images/Trialoffer.png'
 
 const OfferBanner = () => {
   const [showBanner, setShowBanner] = useState(false);
@@ -9,7 +10,7 @@ const OfferBanner = () => {
     const isOfferPeriod =
       now.getFullYear() === 2025 && (
         (now.getMonth() === 9) || // October (pre-offer promo)
-        (now.getMonth() === 10 && now.getDate() <= 15) // November 1–15
+        (now.getMonth() === 11 && now.getDate() <= 20) // November 1–15
       );
 
     if (isOfferPeriod) {
@@ -38,7 +39,7 @@ const OfferBanner = () => {
 
         {/* Banner Image */}
         <img
-          src={OfferBannerimage}
+          src={Trialoffer}
           alt="November Offer"
           className="w-full h-auto object-cover"
         />
